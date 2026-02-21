@@ -1,26 +1,43 @@
 {
   "expo": {
-    "name": "restaurant-delivery-client",
-    "slug": "restaurant-delivery-client",
+    "name": "MyINSAM Resto",
+    "slug": "myinsam-resto",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "description": "Commandez vos plats préférés et faites-vous livrer rapidement à Bafoussam. Livraison rapide, paiement sécurisé.",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "extra": {
+      "privacyPolicyUrl": "https://votresite.com/privacy",
+      "termsOfServiceUrl": "https://votresite.com/terms",
+      "supportEmail": "support@myinsam.cm",
+      "supportPhone": "+237659339778"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chrisdev237.myinsamresto",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison.",
+        "NSLocationAlwaysUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.chrisdev237.myinsamresto",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
