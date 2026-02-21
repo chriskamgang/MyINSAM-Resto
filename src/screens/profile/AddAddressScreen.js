@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform, Switch, FlatList,
   Dimensions,
 } from 'react-native';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { profileService } from '../../services/profileService';
 
@@ -192,9 +192,15 @@ export default function AddAddressScreen({ route, navigation }) {
           <View style={styles.mapContainer}>
             <MapView
               ref={mapRef}
+              provider={PROVIDER_DEFAULT}
               style={styles.map}
               initialRegion={DEFAULT_REGION}
+              region={region}
               onPress={handleMapPress}
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+              rotateEnabled={false}
+              pitchEnabled={false}
             >
               <UrlTile
                 urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
