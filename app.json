@@ -8,14 +8,6 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "description": "Commandez vos plats préférés et faites-vous livrer rapidement à Bafoussam. Livraison rapide, paiement sécurisé.",
-    "plugins": [
-      [
-        "react-native-maps",
-        {
-          "useGoogleMaps": false
-        }
-      ]
-    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
