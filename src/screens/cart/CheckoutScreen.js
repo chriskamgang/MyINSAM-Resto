@@ -44,6 +44,13 @@ export default function CheckoutScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
 
+  // Quick address input (without saving)
+  const [showQuickAddress, setShowQuickAddress] = useState(false);
+  const [quickAddressQuery, setQuickAddressQuery] = useState('');
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [quickAddressPhone, setQuickAddressPhone] = useState('');
+
   useEffect(() => {
     loadAddresses();
   }, []);
@@ -61,6 +68,44 @@ export default function CheckoutScreen({ navigation }) {
     }
   };
 
+  // Search address with Nominatim
+  const searchAddress = async (query) => {
+    if (!query.trim()) {
+      setAddressSuggestions([]);
+      return;
+    }
+    setSearchingAddress(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=fr&countrycodes=cm`,
+        { headers: { 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
+      );
+      const data = await res.json();
+      setAddressSuggestions(data);
+    } catch (e) {
+      console.error('Erreur recherche adresse:', e);
+      setAddressSuggestions([]);
+    } finally {
+      setSearchingAddress(false);
+    }
+  };
+
+  const selectQuickAddress = (suggestion) => {
+    const tempAddress = {
+      id: 'temp',
+      address: suggestion.display_name,
+      latitude: parseFloat(suggestion.lat),
+      longitude: parseFloat(suggestion.lon),
+      phone: quickAddressPhone.trim() || null,
+      label: 'Adresse temporaire',
+      is_default: false,
+    };
+    setSelectedAddress(tempAddress);
+    setQuickAddressQuery('');
+    setAddressSuggestions([]);
+    setShowQuickAddress(false);
+  };
+
   const handleOrder = async () => {
     if (!selectedAddress) {
       Alert.alert('Adresse manquante', 'Veuillez sélectionner une adresse de livraison.');
@@ -69,9 +114,23 @@ export default function CheckoutScreen({ navigation }) {
 
     setLoading(true);
     try {
+      // If temporary address, create it first
+      let addressId = selectedAddress.id;
+      if (selectedAddress.id === 'temp') {
+        const newAddr = await profileService.addAddress({
+          label: 'Commande rapide',
+          address: selectedAddress.address,
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude,
+          phone: selectedAddress.phone,
+          is_default: false,
+        });
+        addressId = newAddr.id;
+      }
+
       const orderData = {
         restaurant_id: 1, // Application mono-restaurant
-        address_id: selectedAddress.id,
+        address_id: addressId,
         payment_method: paymentMethod,
         special_instructions: note.trim() || null,
         coupon_code: coupon?.code || null,
@@ -139,7 +198,27 @@ export default function CheckoutScreen({ navigation }) {
           </View>
         ) : (
           <>
-            {addresses.map(addr => (
+            {/* Show selected address if temp */}
+            {selectedAddress?.id === 'temp' && (
+              <View style={[styles.addressCard, styles.addressCardSelected]}>
+                <View style={styles.addressRadio}>
+                  <View style={[styles.radioOuter, styles.radioOuterSelected]}>
+                    <View style={styles.radioInner} />
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.addressLabel}>Adresse rapide</Text>
+                  <Text style={styles.addressValue}>{selectedAddress.address}</Text>
+                  {selectedAddress.phone && <Text style={styles.addressPhone}>📞 {selectedAddress.phone}</Text>}
+                </View>
+                <TouchableOpacity onPress={() => setSelectedAddress(null)}>
+                  <Text style={{ color: COLORS.primary, fontSize: 20 }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Show saved addresses */}
+            {selectedAddress?.id !== 'temp' && addresses.map(addr => (
               <TouchableOpacity
                 key={addr.id}
                 style={[styles.addressCard, selectedAddress?.id === addr.id && styles.addressCardSelected]}
@@ -158,12 +237,74 @@ export default function CheckoutScreen({ navigation }) {
                 </View>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity
-              style={styles.addMoreAddress}
-              onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}
-            >
-              <Text style={styles.addMoreAddressText}>+ Nouvelle adresse</Text>
-            </TouchableOpacity>
+
+            {/* Quick address input */}
+            {!showQuickAddress ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                <TouchableOpacity
+                  style={[styles.addMoreAddress, { flex: 1 }]}
+                  onPress={() => setShowQuickAddress(true)}
+                >
+                  <Text style={styles.addMoreAddressText}>✏️ Saisir une adresse</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addMoreAddress, { flex: 1 }]}
+                  onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}
+                >
+                  <Text style={styles.addMoreAddressText}>+ Nouvelle adresse</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.quickAddressBox}>
+                <Text style={styles.quickAddressTitle}>Saisir votre adresse</Text>
+                <TextInput
+                  style={styles.quickAddressInput}
+                  placeholder="Ex: Tamdja, Bafoussam"
+                  value={quickAddressQuery}
+                  onChangeText={(text) => {
+                    setQuickAddressQuery(text);
+                    searchAddress(text);
+                  }}
+                  placeholderTextColor="#aaa"
+                />
+                {searchingAddress && (
+                  <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 8 }} />
+                )}
+                {addressSuggestions.length > 0 && (
+                  <View style={styles.suggestionsBox}>
+                    {addressSuggestions.map((item) => (
+                      <TouchableOpacity
+                        key={item.place_id}
+                        style={styles.suggestionItem}
+                        onPress={() => selectQuickAddress(item)}
+                      >
+                        <Text style={styles.suggestionText} numberOfLines={2}>
+                          {item.display_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <TextInput
+                  style={[styles.quickAddressInput, { marginTop: 8 }]}
+                  placeholder="Numéro de téléphone (optionnel)"
+                  value={quickAddressPhone}
+                  onChangeText={setQuickAddressPhone}
+                  placeholderTextColor="#aaa"
+                  keyboardType="phone-pad"
+                />
+                <TouchableOpacity
+                  style={{ marginTop: 8 }}
+                  onPress={() => {
+                    setShowQuickAddress(false);
+                    setQuickAddressQuery('');
+                    setAddressSuggestions([]);
+                  }}
+                >
+                  <Text style={{ color: COLORS.gray, fontSize: 13 }}>Annuler</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
 
@@ -328,4 +469,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
   orderBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+
+  // Quick address input
+  quickAddressBox: {
+    backgroundColor: COLORS.card, borderRadius: 14, padding: 14, marginTop: 8,
+    borderWidth: 1.5, borderColor: COLORS.primary,
+  },
+  quickAddressTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
+  quickAddressInput: {
+    backgroundColor: '#f9f9f9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: '#e0e0e0',
+  },
+  suggestionsBox: {
+    backgroundColor: '#fff', borderRadius: 10, marginTop: 8,
+    borderWidth: 1, borderColor: '#e0e0e0', overflow: 'hidden',
+  },
+  suggestionItem: {
+    padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  },
+  suggestionText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
 });
