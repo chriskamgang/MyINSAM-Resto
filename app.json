@@ -33,7 +33,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.chrisdev237.myinsamresto",
-      "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
