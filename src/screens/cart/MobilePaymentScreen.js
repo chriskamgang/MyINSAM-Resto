@@ -4,6 +4,7 @@ import {
   TextInput, ActivityIndicator, Alert, Animated,
 } from 'react-native';
 import { paymentService } from '../../services/paymentService';
+import { useCart } from '../../context/CartContext';
 
 const COLORS = {
   primary: '#FF6B35',
@@ -17,6 +18,7 @@ const COLORS = {
 
 export default function MobilePaymentScreen({ route, navigation }) {
   const { order, paymentMethod } = route.params;
+  const { clearCart } = useCart();
 
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +99,10 @@ export default function MobilePaymentScreen({ route, navigation }) {
           [
             {
               text: 'Voir ma commande',
-              onPress: () => navigation.replace('OrderConfirmation', { order: { ...order, id: result.payment.order_id } }),
+              onPress: () => {
+                clearCart(); // Vider le panier après confirmation du paiement
+                navigation.replace('OrderConfirmation', { order: { ...order, id: result.payment.order_id } });
+              },
             },
           ]
         );

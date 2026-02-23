@@ -1,14 +1,24 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   SafeAreaView, ScrollView, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Switch,
+  KeyboardAvoidingView, Platform, Switch, FlatList,
+  Dimensions,
 } from 'react-native';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { profileService } from '../../services/profileService';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 const LABELS = ['Maison', 'Bureau', 'Autre'];
+const { width } = Dimensions.get('window');
+
+const DEFAULT_REGION = {
+  latitude: 5.4647,
+  longitude: 10.4244,
+  latitudeDelta: 0.02,
+  longitudeDelta: 0.02,
+};
 
 export default function AddAddressScreen({ route, navigation }) {
   const { onSave } = route.params || {};
@@ -18,10 +28,10 @@ export default function AddAddressScreen({ route, navigation }) {
   const [isDefault,   setIsDefault]   = useState(false);
   const [loading,     setLoading]     = useState(false);
 
-  // Address state
+  // Map state
+  const [region,      setRegion]      = useState(DEFAULT_REGION);
+  const [markerCoord, setMarkerCoord] = useState(null);
   const [addressText, setAddressText] = useState('');
-  const [latitude,    setLatitude]    = useState(null);
-  const [longitude,   setLongitude]   = useState(null);
 
   // GPS state
   const [locating,    setLocating]    = useState(false);
@@ -30,6 +40,8 @@ export default function AddAddressScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searching,   setSearching]   = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+
+  const mapRef = useRef(null);
 
   // ─── GPS: Me livrer ici ──────────────────────────────────────────────────────
   const handleGPS = useCallback(async () => {
@@ -41,21 +53,24 @@ export default function AddAddressScreen({ route, navigation }) {
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude: lat, longitude: lon } = loc.coords;
+      const { latitude, longitude } = loc.coords;
 
       // Reverse geocoding via Nominatim
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
         { headers: { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
       );
       const data = await res.json();
-      const addr = data.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      const addr = data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 
-      setLatitude(lat);
-      setLongitude(lon);
+      setMarkerCoord({ latitude, longitude });
       setAddressText(addr);
       setSearchQuery('');
       setSearchResults([]);
+
+      const newRegion = { latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 };
+      setRegion(newRegion);
+      mapRef.current?.animateToRegion(newRegion, 800);
     } catch (e) {
       Alert.alert('Erreur', 'Impossible d\'obtenir votre position.');
     } finally {
@@ -84,18 +99,57 @@ export default function AddAddressScreen({ route, navigation }) {
   }, [searchQuery]);
 
   const selectSearchResult = useCallback((item) => {
-    setLatitude(parseFloat(item.lat));
-    setLongitude(parseFloat(item.lon));
+    const latitude  = parseFloat(item.lat);
+    const longitude = parseFloat(item.lon);
+
+    setMarkerCoord({ latitude, longitude });
     setAddressText(item.display_name);
     setSearchQuery('');
     setSearchResults([]);
+
+    const newRegion = { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+    setRegion(newRegion);
+    mapRef.current?.animateToRegion(newRegion, 800);
   }, []);
 
+  // ─── Map: tap or drag marker ─────────────────────────────────────────────────
+  const handleMapPress = useCallback(async (e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setMarkerCoord({ latitude, longitude });
+
+    // Reverse geocode
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+        { headers: { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
+      );
+      const data = await res.json();
+      setAddressText(data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+    } catch {
+      setAddressText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+    }
+  }, []);
+
+  const handleMarkerDrag = useCallback(async (e) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setMarkerCoord({ latitude, longitude });
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+        { headers: { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
+      );
+      const data = await res.json();
+      setAddressText(data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+    } catch {
+      setAddressText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+    }
+  }, []);
 
   // ─── Save ────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!addressText.trim()) {
-      Alert.alert('Adresse manquante', 'Utilisez le GPS ou la recherche pour sélectionner une adresse.');
+      Alert.alert('Adresse manquante', 'Sélectionnez une adresse sur la carte ou via la recherche.');
       return;
     }
     setLoading(true);
@@ -103,8 +157,8 @@ export default function AddAddressScreen({ route, navigation }) {
       await profileService.addAddress({
         label,
         address: addressText.trim(),
-        latitude:   latitude,
-        longitude:  longitude,
+        latitude:   markerCoord?.latitude  ?? null,
+        longitude:  markerCoord?.longitude ?? null,
         is_default: isDefault,
         phone:      phone.trim() || null,
       });
@@ -134,17 +188,41 @@ export default function AddAddressScreen({ route, navigation }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── GPS BUTTON ── */}
-          <View style={styles.section}>
-            <TouchableOpacity style={styles.gpsButton} onPress={handleGPS} disabled={locating}>
-              {locating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.gpsIcon}>📍</Text>
-                  <Text style={styles.gpsBtnText}>Utiliser ma position actuelle</Text>
-                </>
+          {/* ── MAP ── */}
+          <View style={styles.mapContainer}>
+            <MapView
+              ref={mapRef}
+              provider={PROVIDER_DEFAULT}
+              style={styles.map}
+              initialRegion={DEFAULT_REGION}
+              region={region}
+              onPress={handleMapPress}
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+              rotateEnabled={false}
+              pitchEnabled={false}
+            >
+              <UrlTile
+                urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                maximumZ={19}
+                flipY={false}
+              />
+              {markerCoord && (
+                <Marker
+                  coordinate={markerCoord}
+                  draggable
+                  onDragEnd={handleMarkerDrag}
+                  pinColor={COLORS.primary}
+                />
               )}
+            </MapView>
+
+            {/* GPS button overlay */}
+            <TouchableOpacity style={styles.gpsBtn} onPress={handleGPS} disabled={locating}>
+              {locating
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.gpsBtnText}>📍 Me livrer ici</Text>
+              }
             </TouchableOpacity>
           </View>
 
@@ -275,15 +353,17 @@ const styles = StyleSheet.create({
   backText:    { fontSize: 24, color: COLORS.text },
   headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
 
-  // GPS Button
-  gpsButton: {
-    backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3, shadowRadius: 4, elevation: 3,
+  // Map
+  mapContainer: { height: 260, position: 'relative' },
+  map:          { flex: 1 },
+  gpsBtn: {
+    position: 'absolute', bottom: 12, left: 12,
+    backgroundColor: COLORS.primary, borderRadius: 24,
+    paddingHorizontal: 16, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 4,
   },
-  gpsIcon: { fontSize: 20 },
-  gpsBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  gpsBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   // Sections
   section: { paddingHorizontal: 16, marginTop: 16 },

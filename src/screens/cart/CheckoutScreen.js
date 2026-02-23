@@ -153,13 +153,13 @@ export default function CheckoutScreen({ navigation }) {
       }
 
       // Si paiement mobile money → rediriger vers l'écran de paiement
+      // NE PAS vider le panier ici, on le videra après confirmation du paiement
       if (paymentMethod === 'mtn_momo' || paymentMethod === 'orange_money') {
-        clearCart();
         navigation.replace('MobilePayment', { order, paymentMethod, deliveryMinutes });
         return;
       }
 
-      // Sinon (espèces) → aller directement à la confirmation
+      // Sinon (espèces) → aller directement à la confirmation et vider le panier
       clearCart();
       navigation.replace('OrderConfirmation', { order, deliveryMinutes });
     } catch (e) {
