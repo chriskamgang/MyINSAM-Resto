@@ -7,10 +7,19 @@ import { useCart } from '../../context/CartContext';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 
+const SERVER_URL = 'https://restaurant.iues-insambot.com';
+
+function getImageUrl(image) {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${SERVER_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+}
+
 export default function ItemDetailScreen({ route, navigation }) {
   const { item }  = route.params;
   const { addItem, items } = useCart();
   const [quantity, setQuantity] = useState(1);
+  const [imgError, setImgError] = useState(false);
 
   const hasPromo   = item.discount_price && item.discount_price < item.price;
   const unitPrice  = hasPromo ? Number(item.discount_price) : Number(item.price);
@@ -36,8 +45,8 @@ export default function ItemDetailScreen({ route, navigation }) {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Image header */}
         <View style={styles.imageContainer}>
-          {item.image
-            ? <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
+          {getImageUrl(item.image) && !imgError
+            ? <Image source={{ uri: getImageUrl(item.image) }} style={styles.image} resizeMode="cover" onError={() => setImgError(true)} />
             : <View style={styles.imagePlaceholder}><Text style={{ fontSize: 80 }}>🍽️</Text></View>
           }
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>

@@ -10,6 +10,16 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
+
+// Base URL du serveur (sans /api) pour résoudre les chemins d'images relatifs
+const SERVER_URL = 'https://restaurant.iues-insambot.com';
+
+function getImageUrl(image) {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${SERVER_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+}
+
 const COLORS = {
   primary:   '#FF6B35',
   secondary: '#FF8E53',
@@ -28,13 +38,20 @@ function MenuItemCard({ item, onPress, onAdd }) {
   const hasPromo = item.discount_price && item.discount_price < item.price;
   const price    = hasPromo ? item.discount_price : item.price;
   const discountPercent = hasPromo ? Math.round(((item.price - item.discount_price) / item.price) * 100) : 0;
+  const imageUrl = getImageUrl(item.image);
+  const [imgError, setImgError] = React.useState(false);
 
   return (
     <TouchableOpacity style={styles.itemCard} onPress={() => onPress(item)} activeOpacity={0.85}>
       {/* Image section */}
       <View style={styles.itemImageBox}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.itemImage} resizeMode="cover" />
+        {imageUrl && !imgError ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.itemImage}
+            resizeMode="cover"
+            onError={() => setImgError(true)}
+          />
         ) : (
           <View style={styles.itemPlaceholder}>
             <Text style={styles.placeholderIcon}>🍽️</Text>

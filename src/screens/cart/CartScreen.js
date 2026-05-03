@@ -7,13 +7,23 @@ import { useCart } from '../../context/CartContext';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 
+const SERVER_URL = 'https://restaurant.iues-insambot.com';
+
+function getImageUrl(image) {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${SERVER_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+}
+
 function CartItem({ item, onIncrease, onDecrease, onDelete }) {
   const unitPrice = item.effective_price || item.price;
+  const imageUrl = getImageUrl(item.image);
+  const [imgError, setImgError] = React.useState(false);
   return (
     <View style={styles.cartItem}>
       <View style={styles.itemImageBox}>
-        {item.image
-          ? <Image source={{ uri: item.image }} style={styles.itemImage} />
+        {imageUrl && !imgError
+          ? <Image source={{ uri: imageUrl }} style={styles.itemImage} onError={() => setImgError(true)} />
           : <Text style={styles.itemPlaceholder}>🍽️</Text>
         }
       </View>
