@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, ScrollView, Alert,
+  SafeAreaView, ScrollView, Alert, Linking,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 
@@ -98,6 +98,14 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Application</Text>
           <View style={styles.menuCard}>
             <MenuItem icon="ℹ️" label="À propos" desc="Version 1.0.0" onPress={() => {}} />
+            <View style={styles.divider} />
+            <MenuItem icon="🔒" label="Politique de confidentialité" desc="Comment nous protégeons vos données"
+              onPress={() => Linking.openURL('https://restaurant.iues-insambot.com/privacy.html')}
+            />
+            <View style={styles.divider} />
+            <MenuItem icon="📄" label="Conditions d'utilisation" desc="Nos conditions générales"
+              onPress={() => Linking.openURL('https://restaurant.iues-insambot.com/terms.html')}
+            />
             <View style={styles.divider} />
             <MenuItem icon="⭐" label="Noter l'application" onPress={() => {}} />
           </View>
