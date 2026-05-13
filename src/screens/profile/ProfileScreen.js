@@ -100,11 +100,11 @@ export default function ProfileScreen({ navigation }) {
             <MenuItem icon="ℹ️" label="À propos" desc="Version 1.0.0" onPress={() => {}} />
             <View style={styles.divider} />
             <MenuItem icon="🔒" label="Politique de confidentialité" desc="Comment nous protégeons vos données"
-              onPress={() => Linking.openURL('https://restaurant.iues-insambot.com/privacy.html')}
+              onPress={() => Linking.openURL('https://restaurant.iues-insambot.com/privacy-policy')}
             />
             <View style={styles.divider} />
             <MenuItem icon="📄" label="Conditions d'utilisation" desc="Nos conditions générales"
-              onPress={() => Linking.openURL('https://restaurant.iues-insambot.com/terms.html')}
+              onPress={() => Linking.openURL('https://restaurant.iues-insambot.com/terms-of-service')}
             />
             <View style={styles.divider} />
             <MenuItem icon="⭐" label="Noter l'application" onPress={() => {}} />
