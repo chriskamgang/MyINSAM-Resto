@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import AuthNavigator   from './AuthNavigator';
 import TabNavigator    from './TabNavigator';
+import RestaurantScreen        from '../screens/menu/RestaurantScreen';
 import ItemDetailScreen        from '../screens/menu/ItemDetailScreen';
 import CheckoutScreen          from '../screens/cart/CheckoutScreen';
 import MobilePaymentScreen     from '../screens/cart/MobilePaymentScreen';
@@ -20,7 +21,7 @@ import NotificationsScreen     from '../screens/profile/NotificationsScreen';
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -33,23 +34,24 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <>
-            <Stack.Screen name="Main"               component={TabNavigator} />
-            <Stack.Screen name="ItemDetail"         component={ItemDetailScreen} />
-            <Stack.Screen name="Checkout"           component={CheckoutScreen} />
-            <Stack.Screen name="MobilePayment"      component={MobilePaymentScreen} />
-            <Stack.Screen name="OrderConfirmation"  component={OrderConfirmationScreen} />
-            <Stack.Screen name="OrderDetail"        component={OrderDetailScreen} />
-            <Stack.Screen name="OrderTracking"      component={OrderTrackingScreen} />
-            <Stack.Screen name="AddAddress"         component={AddAddressScreen} />
-            <Stack.Screen name="Addresses"          component={AddressesScreen} />
-            <Stack.Screen name="EditProfile"        component={EditProfileScreen} />
-            <Stack.Screen name="Notifications"      component={NotificationsScreen} />
-          </>
-        ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
-        )}
+        {/* Menu browsing — accessible without login */}
+        <Stack.Screen name="Main"               component={TabNavigator} />
+        <Stack.Screen name="Restaurant"         component={RestaurantScreen} />
+        <Stack.Screen name="ItemDetail"         component={ItemDetailScreen} />
+
+        {/* Auth screens */}
+        <Stack.Screen name="Auth"               component={AuthNavigator} />
+
+        {/* Account-based screens — require login */}
+        <Stack.Screen name="Checkout"           component={CheckoutScreen} />
+        <Stack.Screen name="MobilePayment"      component={MobilePaymentScreen} />
+        <Stack.Screen name="OrderConfirmation"  component={OrderConfirmationScreen} />
+        <Stack.Screen name="OrderDetail"        component={OrderDetailScreen} />
+        <Stack.Screen name="OrderTracking"      component={OrderTrackingScreen} />
+        <Stack.Screen name="AddAddress"         component={AddAddressScreen} />
+        <Stack.Screen name="Addresses"          component={AddressesScreen} />
+        <Stack.Screen name="EditProfile"        component={EditProfileScreen} />
+        <Stack.Screen name="Notifications"      component={NotificationsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
