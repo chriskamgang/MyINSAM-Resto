@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
 export default function RegisterScreen({ navigation }) {
@@ -13,39 +14,49 @@ export default function RegisterScreen({ navigation }) {
   const [phone,    setPhone]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleRegister = async () => {
+    setErrorMsg('');
+
     if (!name.trim() || !email.trim() || !phone.trim() || !password.trim()) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      setErrorMsg('Veuillez remplir tous les champs.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères.');
+      setErrorMsg('Le mot de passe doit contenir au moins 6 caractères.');
       return;
     }
     setLoading(true);
     try {
       await register(name.trim(), email.trim(), phone.trim(), password);
     } catch (error) {
-      const msg = error.response?.data?.message || 'Une erreur est survenue.';
-      Alert.alert('Inscription échouée', msg);
+      const msg = error.response?.data?.message
+        || (error.code === 'ECONNABORTED' ? 'Le serveur met trop de temps à répondre. Vérifiez votre connexion.'
+        : error.message?.includes('Network Error') ? 'Impossible de se connecter au serveur. Vérifiez votre connexion internet.'
+        : 'Une erreur est survenue.');
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const Field = ({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize }) => (
+  const clearError = () => { if (errorMsg) setErrorMsg(''); };
+
+  const Field = ({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize, textContentType, autoComplete }) => (
     <View style={styles.inputGroup}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         style={styles.input}
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={(t) => { onChangeText(t); clearError(); }}
         placeholder={placeholder}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize || 'none'}
         autoCorrect={false}
+        textContentType={textContentType}
+        autoComplete={autoComplete}
       />
     </View>
   );
@@ -67,15 +78,23 @@ export default function RegisterScreen({ navigation }) {
 
         {/* Formulaire */}
         <View style={styles.form}>
-          <Field label="Nom complet"    value={name}     onChangeText={setName}     placeholder="Jean Dupont"           autoCapitalize="words" />
-          <Field label="Email"          value={email}    onChangeText={setEmail}    placeholder="vous@exemple.com"      keyboardType="email-address" />
-          <Field label="Téléphone"      value={phone}    onChangeText={setPhone}    placeholder="+237 6XX XXX XXX"      keyboardType="phone-pad" />
-          <Field label="Mot de passe"   value={password} onChangeText={setPassword} placeholder="Minimum 6 caractères" secureTextEntry />
+          {errorMsg ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
+
+          <Field label="Nom complet"    value={name}     onChangeText={setName}     placeholder="Jean Dupont"           autoCapitalize="words" textContentType="name" autoComplete="name" />
+          <Field label="Email"          value={email}    onChangeText={setEmail}    placeholder="vous@exemple.com"      keyboardType="email-address" textContentType="emailAddress" autoComplete="email" />
+          <Field label="Téléphone"      value={phone}    onChangeText={setPhone}    placeholder="+237 6XX XXX XXX"      keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" />
+          <Field label="Mot de passe"   value={password} onChangeText={setPassword} placeholder="Minimum 6 caractères" secureTextEntry textContentType="newPassword" autoComplete="new-password" />
 
           <TouchableOpacity
             style={[styles.btn, loading && styles.btnDisabled]}
             onPress={handleRegister}
             disabled={loading}
+            activeOpacity={0.8}
           >
             {loading
               ? <ActivityIndicator color="#fff" />
@@ -104,6 +123,17 @@ const styles = StyleSheet.create({
   backText:  { color: '#FF6B35', fontSize: 16, fontWeight: '600' },
   title:     { fontSize: 28, fontWeight: 'bold', color: '#1a1a1a' },
   subtitle:  { fontSize: 15, color: '#888', marginTop: 6 },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+  },
+  errorText: { flex: 1, fontSize: 14, color: '#DC2626', fontWeight: '500' },
   form:      { gap: 16 },
   inputGroup: { gap: 6 },
   label:      { fontSize: 14, fontWeight: '600', color: '#333' },

@@ -4,6 +4,7 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform,
   ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
 export default function LoginScreen({ navigation }) {
@@ -12,10 +13,13 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleLogin = async () => {
+    setErrorMsg('');
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      setErrorMsg('Veuillez remplir tous les champs.');
       return;
     }
     setLoading(true);
@@ -23,8 +27,11 @@ export default function LoginScreen({ navigation }) {
       await login(email.trim(), password);
       // La navigation se fait automatiquement via AppNavigator (user devient non-null)
     } catch (error) {
-      const msg = error.response?.data?.message || 'Email ou mot de passe incorrect.';
-      Alert.alert('Connexion échouée', msg);
+      const msg = error.response?.data?.message
+        || (error.code === 'ECONNABORTED' ? 'Le serveur met trop de temps à répondre. Vérifiez votre connexion.'
+        : error.message?.includes('Network Error') ? 'Impossible de se connecter au serveur. Vérifiez votre connexion internet.'
+        : 'Email ou mot de passe incorrect.');
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
@@ -38,23 +45,32 @@ export default function LoginScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>🍔</Text>
+          <Ionicons name="restaurant" size={60} color="#FF6B35" />
           <Text style={styles.title}>Bon retour !</Text>
           <Text style={styles.subtitle}>Connectez-vous pour commander</Text>
         </View>
 
         {/* Formulaire */}
         <View style={styles.form}>
+          {errorMsg ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(t) => { setEmail(t); setErrorMsg(''); }}
               placeholder="vous@exemple.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              textContentType="emailAddress"
+              autoComplete="email"
             />
           </View>
 
@@ -64,15 +80,17 @@ export default function LoginScreen({ navigation }) {
               <TextInput
                 style={[styles.input, { flex: 1, marginBottom: 0 }]}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => { setPassword(t); setErrorMsg(''); }}
                 placeholder="••••••••"
                 secureTextEntry={!showPass}
+                textContentType="password"
+                autoComplete="password"
               />
               <TouchableOpacity
                 style={styles.eyeBtn}
                 onPress={() => setShowPass(!showPass)}
               >
-                <Text>{showPass ? '🙈' : '👁️'}</Text>
+                <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
               </TouchableOpacity>
             </View>
           </View>
@@ -81,6 +99,7 @@ export default function LoginScreen({ navigation }) {
             style={[styles.btn, loading && styles.btnDisabled]}
             onPress={handleLogin}
             disabled={loading}
+            activeOpacity={0.8}
           >
             {loading
               ? <ActivityIndicator color="#fff" />
@@ -108,6 +127,17 @@ const styles = StyleSheet.create({
   logo:     { fontSize: 60, marginBottom: 16 },
   title:    { fontSize: 28, fontWeight: 'bold', color: '#1a1a1a' },
   subtitle: { fontSize: 15, color: '#888', marginTop: 6 },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+  },
+  errorText: { flex: 1, fontSize: 14, color: '#DC2626', fontWeight: '500' },
   form:         { gap: 16 },
   inputGroup:   { gap: 6 },
   label:        { fontSize: 14, fontWeight: '600', color: '#333' },
