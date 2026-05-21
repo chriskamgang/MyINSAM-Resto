@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "MyINSAM Resto",
+    "name": "Restaurant de l'Estuaire",
     "slug": "myinsam-resto",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,7 +21,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.chrisdev237.myinsamresto",
+      "bundleIdentifier": "com.chrisdev237.estuaireresto",
+      "buildNumber": "4",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison.",
         "NSLocationAlwaysUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison."
@@ -32,7 +33,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.chrisdev237.myinsamresto",
+      "package": "com.chrisdev237.myinsamresto1",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
