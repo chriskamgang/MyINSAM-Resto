@@ -22,7 +22,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chrisdev237.estuaireresto",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison.",
         "NSLocationAlwaysUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison."
