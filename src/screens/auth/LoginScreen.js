@@ -25,7 +25,7 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      // La navigation se fait automatiquement via AppNavigator (user devient non-null)
+      navigation.navigate('Main');
     } catch (error) {
       const msg = error.response?.data?.message
         || (error.code === 'ECONNABORTED' ? 'Le serveur met trop de temps à répondre. Vérifiez votre connexion.'

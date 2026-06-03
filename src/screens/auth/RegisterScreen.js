@@ -30,6 +30,7 @@ export default function RegisterScreen({ navigation }) {
     setLoading(true);
     try {
       await register(name.trim(), email.trim(), phone.trim(), password);
+      navigation.navigate('Main');
     } catch (error) {
       const msg = error.response?.data?.message
         || (error.code === 'ECONNABORTED' ? 'Le serveur met trop de temps à répondre. Vérifiez votre connexion.'
