@@ -44,24 +44,6 @@ export default function RegisterScreen({ navigation }) {
 
   const clearError = () => { if (errorMsg) setErrorMsg(''); };
 
-  const Field = ({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize, textContentType, autoComplete }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={(t) => { onChangeText(t); clearError(); }}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={autoCapitalize || 'none'}
-        autoCorrect={false}
-        textContentType={textContentType}
-        autoComplete={autoComplete}
-      />
-    </View>
-  );
-
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -86,10 +68,64 @@ export default function RegisterScreen({ navigation }) {
             </View>
           ) : null}
 
-          <Field label="Nom complet"    value={name}     onChangeText={setName}     placeholder="Jean Dupont"           autoCapitalize="words" textContentType="name" autoComplete="name" />
-          <Field label="Email"          value={email}    onChangeText={setEmail}    placeholder="vous@exemple.com"      keyboardType="email-address" textContentType="emailAddress" autoComplete="email" />
-          <Field label="Téléphone"      value={phone}    onChangeText={setPhone}    placeholder="+237 6XX XXX XXX"      keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" />
-          <Field label="Mot de passe"   value={password} onChangeText={setPassword} placeholder="Minimum 6 caractères" secureTextEntry textContentType="newPassword" autoComplete="new-password" />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nom complet</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={(t) => { setName(t); clearError(); }}
+              placeholder="Jean Dupont"
+              autoCapitalize="words"
+              autoCorrect={false}
+              textContentType="name"
+              autoComplete="name"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={(t) => { setEmail(t); clearError(); }}
+              placeholder="vous@exemple.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              autoComplete="email"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Téléphone</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={(t) => { setPhone(t); clearError(); }}
+              placeholder="+237 6XX XXX XXX"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Mot de passe</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={(t) => { setPassword(t); clearError(); }}
+              placeholder="Minimum 6 caractères"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
+            />
+          </View>
 
           <TouchableOpacity
             style={[styles.btn, loading && styles.btnDisabled]}
