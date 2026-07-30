@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, Alert, ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { profileService } from '../../services/profileService';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -74,7 +75,7 @@ export default function AddressesScreen({ navigation }) {
 
       {addresses.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📍</Text>
+          <Ionicons name="location-outline" size={60} color="#ccc" style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Aucune adresse</Text>
           <Text style={styles.emptySubtitle}>Ajoutez une adresse de livraison</Text>
           <TouchableOpacity
@@ -93,7 +94,7 @@ export default function AddressesScreen({ navigation }) {
             <View style={[styles.card, item.is_default && styles.cardDefault]}>
               <View style={styles.cardHeader}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.labelIcon}>📍</Text>
+                  <Ionicons name="location" size={16} color="#FF6B35" />
                   <Text style={styles.labelText}>{item.label || 'Adresse'}</Text>
                   {item.is_default && (
                     <View style={styles.defaultBadge}>
@@ -102,12 +103,12 @@ export default function AddressesScreen({ navigation }) {
                   )}
                 </View>
                 <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                  <Text style={styles.deleteBtn}>🗑</Text>
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
                 </TouchableOpacity>
               </View>
               <Text style={styles.addressText}>{item.address}</Text>
               {item.phone && (
-                <Text style={styles.phoneText}>📞 {item.phone}</Text>
+                <Text style={styles.phoneText}><Ionicons name="call-outline" size={12} color="#888" /> {item.phone}</Text>
               )}
               {!item.is_default && (
                 <TouchableOpacity

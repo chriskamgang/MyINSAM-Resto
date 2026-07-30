@@ -3,20 +3,21 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { profileService } from '../../services/profileService';
 import { useFocusEffect } from '@react-navigation/native';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 
 const NOTIF_ICONS = {
-  order:    '📦',
-  promo:    '🎉',
-  delivery: '🚚',
-  system:   'ℹ️',
+  order:    'cube-outline',
+  promo:    'pricetag-outline',
+  delivery: 'bicycle-outline',
+  system:   'information-circle-outline',
 };
 
 function NotifCard({ notif, onPress }) {
-  const icon = NOTIF_ICONS[notif.type] || '🔔';
+  const iconName = NOTIF_ICONS[notif.type] || 'notifications-outline';
   const date = new Date(notif.created_at).toLocaleString('fr-FR', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
@@ -27,7 +28,7 @@ function NotifCard({ notif, onPress }) {
       activeOpacity={0.8}
     >
       <View style={[styles.iconBox, !notif.read_at && styles.iconBoxUnread]}>
-        <Text style={styles.icon}>{icon}</Text>
+        <Ionicons name={iconName} size={20} color="#FF6B35" />
       </View>
       <View style={styles.content}>
         <Text style={[styles.title, !notif.read_at && styles.titleUnread]} numberOfLines={1}>
@@ -49,7 +50,7 @@ export default function NotificationsScreen({ navigation }) {
   const loadNotifs = useCallback(async () => {
     try {
       const data = await profileService.getNotifications();
-      setNotifications(data);
+      setNotifications(Array.isArray(data) ? data : data?.data || []);
     } catch (e) {
       console.error('Erreur notifs:', e);
     } finally {
@@ -93,7 +94,7 @@ export default function NotificationsScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>←</Text>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           Notifications {unreadCount > 0 ? `(${unreadCount})` : ''}
@@ -109,7 +110,7 @@ export default function NotificationsScreen({ navigation }) {
 
       {notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🔔</Text>
+          <Ionicons name="notifications-outline" size={60} color="#ccc" style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Aucune notification</Text>
           <Text style={styles.emptySubtitle}>Vous serez notifié des mises à jour de vos commandes ici</Text>
         </View>

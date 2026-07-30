@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import AuthNavigator   from './AuthNavigator';
 import TabNavigator    from './TabNavigator';
@@ -17,13 +18,25 @@ import AddAddressScreen        from '../screens/profile/AddAddressScreen';
 import AddressesScreen         from '../screens/profile/AddressesScreen';
 import EditProfileScreen       from '../screens/profile/EditProfileScreen';
 import NotificationsScreen     from '../screens/profile/NotificationsScreen';
+import MarketHomeScreen             from '../screens/market/MarketHomeScreen';
+import CreateMarketListScreen      from '../screens/market/CreateMarketListScreen';
+import MarketOrderSummaryScreen    from '../screens/market/MarketOrderSummaryScreen';
+import MarketOrderDetailScreen     from '../screens/market/MarketOrderDetailScreen';
+import MarketOrderTrackingScreen   from '../screens/market/MarketOrderTrackingScreen';
 
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   const { loading } = useAuth();
+  const [onboardingSeen, setOnboardingSeen] = useState(null);
 
-  if (loading) {
+  useEffect(() => {
+    AsyncStorage.getItem('@onboarding_done').then(val => {
+      setOnboardingSeen(!!val);
+    }).catch(() => setOnboardingSeen(false));
+  }, []);
+
+  if (loading || onboardingSeen === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FF6B35' }}>
         <ActivityIndicator size="large" color="#fff" />
@@ -33,7 +46,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={onboardingSeen ? 'Main' : 'Auth'}>
         {/* Menu browsing — accessible without login */}
         <Stack.Screen name="Main"               component={TabNavigator} />
         <Stack.Screen name="Restaurant"         component={RestaurantScreen} />
@@ -52,6 +65,13 @@ export default function AppNavigator() {
         <Stack.Screen name="Addresses"          component={AddressesScreen} />
         <Stack.Screen name="EditProfile"        component={EditProfileScreen} />
         <Stack.Screen name="Notifications"      component={NotificationsScreen} />
+
+        {/* Market screens */}
+        <Stack.Screen name="MarketHome"          component={MarketHomeScreen} />
+        <Stack.Screen name="CreateMarketList"    component={CreateMarketListScreen} />
+        <Stack.Screen name="MarketOrderSummary"  component={MarketOrderSummaryScreen} />
+        <Stack.Screen name="MarketOrderDetail"   component={MarketOrderDetailScreen} />
+        <Stack.Screen name="MarketOrderTracking" component={MarketOrderTrackingScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

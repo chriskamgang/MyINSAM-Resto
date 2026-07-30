@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   SafeAreaView, Animated, ScrollView, Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const COLORS = {
@@ -70,7 +71,7 @@ export default function OrderConfirmationScreen({ route, navigation }) {
           <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
             <Text style={styles.heroTitle}>Commande confirmée !</Text>
             <Text style={styles.heroSubtitle}>
-              Votre commande a été reçue.{'\n'}Nous préparons tout pour vous 🍽️
+              Votre commande a été reçue.{'\n'}Nous préparons tout pour vous
             </Text>
           </Animated.View>
         </View>
@@ -93,7 +94,7 @@ export default function OrderConfirmationScreen({ route, navigation }) {
               {/* Préparation */}
               <View style={styles.timelineStep}>
                 <View style={[styles.stepDot, styles.stepDotActive]}>
-                  <Text style={styles.stepDotText}>🍳</Text>
+                  <Ionicons name="restaurant-outline" size={20} color="#FF6B35" />
                 </View>
                 <Text style={styles.stepLabel}>Préparation</Text>
                 <Text style={styles.stepTime}>~15 min</Text>
@@ -104,7 +105,7 @@ export default function OrderConfirmationScreen({ route, navigation }) {
               {/* Livraison */}
               <View style={styles.timelineStep}>
                 <View style={[styles.stepDot, styles.stepDotOrange]}>
-                  <Text style={styles.stepDotText}>🛵</Text>
+                  <Ionicons name="bicycle" size={20} color="#fff" />
                 </View>
                 <Text style={styles.stepLabel}>Livraison</Text>
                 <Text style={styles.stepTime}>~{deliveryLabel}</Text>
@@ -115,7 +116,7 @@ export default function OrderConfirmationScreen({ route, navigation }) {
               {/* Arrivée */}
               <View style={styles.timelineStep}>
                 <View style={[styles.stepDot, styles.stepDotGreen]}>
-                  <Text style={styles.stepDotText}>🏠</Text>
+                  <Ionicons name="home-outline" size={20} color="#22c55e" />
                 </View>
                 <Text style={styles.stepLabel}>Arrivée</Text>
                 <Text style={[styles.stepTime, { color: COLORS.primary, fontWeight: '800' }]}>{estimatedTime}</Text>
@@ -142,7 +143,7 @@ export default function OrderConfirmationScreen({ route, navigation }) {
             activeOpacity={0.85}
             onPress={() => navigation.navigate('OrderTracking', { orderId: order?.id })}
           >
-            <Text style={styles.trackBtnIcon}>📍</Text>
+            <Ionicons name="location" size={18} color="#fff" />
             <Text style={styles.trackBtnText}>Suivre ma commande</Text>
           </TouchableOpacity>
 
@@ -150,7 +151,7 @@ export default function OrderConfirmationScreen({ route, navigation }) {
           <TouchableOpacity
             style={styles.homeBtn}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('Main', { screen: 'Menu' })}
+            onPress={() => navigation.navigate('Main', { screen: 'Accueil' })}
           >
             <Text style={styles.homeBtnText}>Retour au menu</Text>
           </TouchableOpacity>

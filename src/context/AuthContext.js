@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
+import { setOnUnauthorized } from '../services/api';
+import { pushNotificationService } from '../services/pushNotificationService';
 
 const AuthContext = createContext({});
 
@@ -8,7 +10,13 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken]     = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Charger l'utilisateur au démarrage
+  // Deconnexion forcee (appelee par l'intercepteur 401)
+  const forceLogout = useCallback(() => {
+    setUser(null);
+    setToken(null);
+  }, []);
+
+  // Charger l'utilisateur au demarrage
   useEffect(() => {
     const loadUser = async () => {
       try {
@@ -22,6 +30,19 @@ export const AuthProvider = ({ children }) => {
     };
     loadUser();
   }, []);
+
+  // Quand l'intercepteur 401 detecte un token expire, deconnecter automatiquement
+  useEffect(() => {
+    setOnUnauthorized(forceLogout);
+    return () => setOnUnauthorized(null);
+  }, [forceLogout]);
+
+  // Enregistrer le push token quand l'utilisateur est connecte
+  useEffect(() => {
+    if (user && token) {
+      pushNotificationService.registerForPushNotifications();
+    }
+  }, [user, token]);
 
   const login = async (email, password) => {
     const { user: u, token: t } = await authService.login(email, password);
@@ -37,7 +58,22 @@ export const AuthProvider = ({ children }) => {
     return u;
   };
 
+  const googleLogin = async (idToken) => {
+    const { user: u, token: t } = await authService.googleLogin(idToken);
+    setUser(u);
+    setToken(t);
+    return u;
+  };
+
+  const appleLogin = async ({ identityToken, fullName, email }) => {
+    const { user: u, token: t } = await authService.appleLogin({ identityToken, fullName, email });
+    setUser(u);
+    setToken(t);
+    return u;
+  };
+
   const logout = async () => {
+    await pushNotificationService.removePushToken();
     await authService.logout();
     setUser(null);
     setToken(null);
@@ -46,7 +82,7 @@ export const AuthProvider = ({ children }) => {
   const updateUser = (updatedUser) => setUser(updatedUser);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, googleLogin, appleLogin, logout, updateUser, forceLogout }}>
       {children}
     </AuthContext.Provider>
   );

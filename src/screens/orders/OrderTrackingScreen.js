@@ -5,6 +5,7 @@ import {
   Linking, Animated,
 } from 'react-native';
 import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import { orderService } from '../../services/orderService';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
@@ -13,13 +14,13 @@ const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a
 const RESTAURANT = { latitude: 5.4720, longitude: 10.4180 };
 
 const STATUS_STEPS = [
-  { key: 'pending',    label: 'En attente',           icon: '⏳', desc: 'En attente de confirmation' },
-  { key: 'confirmed',  label: 'Commande confirmée',   icon: '✅', desc: 'Le restaurant a reçu votre commande' },
-  { key: 'preparing',  label: 'En préparation',        icon: '🍳', desc: 'Vos plats sont en cours de préparation' },
-  { key: 'ready',      label: 'Prête',                 icon: '📦', desc: 'Un livreur récupère votre commande' },
-  { key: 'picked_up',  label: 'Récupérée',             icon: '🛵', desc: 'Le livreur a pris votre commande' },
-  { key: 'on_the_way', label: 'En route vers vous',    icon: '🚀', desc: 'Votre livreur est en chemin !' },
-  { key: 'delivered',  label: 'Livrée',                icon: '🏠', desc: 'Bon appétit !' },
+  { key: 'pending',    label: 'En attente',           iconName: 'time-outline', desc: 'En attente de confirmation' },
+  { key: 'confirmed',  label: 'Commande confirmée',   iconName: 'checkmark-circle-outline', desc: 'Le restaurant a reçu votre commande' },
+  { key: 'preparing',  label: 'En préparation',        iconName: 'restaurant-outline', desc: 'Vos plats sont en cours de préparation' },
+  { key: 'ready',      label: 'Prête',                 iconName: 'cube-outline', desc: 'Un livreur récupère votre commande' },
+  { key: 'picked_up',  label: 'Récupérée',             iconName: 'bicycle-outline', desc: 'Le livreur a pris votre commande' },
+  { key: 'on_the_way', label: 'En route vers vous',    iconName: 'rocket-outline', desc: 'Votre livreur est en chemin !' },
+  { key: 'delivered',  label: 'Livrée',                iconName: 'home-outline', desc: 'Bon appétit !' },
 ];
 
 // Statuts où le livreur est visible sur la carte
@@ -142,7 +143,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
 
         {/* ── Statut principal ── */}
         <View style={styles.statusBanner}>
-          <Text style={styles.statusIcon}>{currentStep.icon}</Text>
+          <Ionicons name={currentStep.iconName} size={28} color={COLORS.primary} style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.statusLabel}>{currentStep.label}</Text>
             <Text style={styles.statusDesc}>{currentStep.desc}</Text>
@@ -168,7 +169,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
               {/* Marqueur restaurant */}
               <Marker coordinate={RESTAURANT} title="Restaurant" anchor={{ x: 0.5, y: 0.5 }}>
                 <View style={styles.markerRestaurant}>
-                  <Text style={{ fontSize: 20 }}>🍴</Text>
+                  <Ionicons name="restaurant" size={20} color="#FF6B35" />
                 </View>
               </Marker>
 
@@ -180,7 +181,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
                   anchor={{ x: 0.5, y: 1 }}
                 >
                   <View style={styles.markerClient}>
-                    <Text style={{ fontSize: 20 }}>📍</Text>
+                    <Ionicons name="location" size={20} color="#FF6B35" />
                   </View>
                 </Marker>
               )}
@@ -193,7 +194,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
                   anchor={{ x: 0.5, y: 0.5 }}
                 >
                   <Animated.View style={[styles.markerDriver, { transform: [{ scale: pulseAnim }] }]}>
-                    <Text style={{ fontSize: 22 }}>🛵</Text>
+                    <Ionicons name="bicycle" size={22} color="#FF6B35" />
                   </Animated.View>
                 </Marker>
               )}
@@ -218,7 +219,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
           /* Bouton "Voir le livreur" — visible uniquement quand il est en route */
           driverVisible ? (
             <TouchableOpacity style={styles.showMapBtn} onPress={() => setShowMap(true)} activeOpacity={0.85}>
-              <Text style={styles.showMapBtnIcon}>🗺️</Text>
+              <Ionicons name="map-outline" size={24} color="#FF6B35" />
               <View>
                 <Text style={styles.showMapBtnTitle}>Voir le livreur en direct</Text>
                 <Text style={styles.showMapBtnSub}>Suivez sa position en temps réel</Text>
@@ -227,7 +228,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
             </TouchableOpacity>
           ) : (
             <View style={styles.mapPreview}>
-              <Text style={styles.mapPreviewEmoji}>🗺️</Text>
+              <Ionicons name="map-outline" size={40} color="#ccc" />
               <Text style={styles.mapPreviewText}>La carte s'activera quand le livreur sera en route</Text>
             </View>
           )
@@ -243,14 +244,14 @@ export default function OrderTrackingScreen({ route, navigation }) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.driverName}>{driver.name}</Text>
-              <Text style={styles.driverVehicle}>🛵 {driver.vehicle_type || 'Moto'}</Text>
+              <Text style={styles.driverVehicle}><Ionicons name="bicycle" size={14} color="#888" /> {driver.vehicle_type || 'Moto'}</Text>
               {driver.rating && (
-                <Text style={styles.driverRating}>⭐ {Number(driver.rating).toFixed(1)}</Text>
+                <Text style={styles.driverRating}><Ionicons name="star" size={13} color="#f59e0b" /> {Number(driver.rating).toFixed(1)}</Text>
               )}
             </View>
             {driver.phone && (
               <TouchableOpacity style={styles.callBtn} onPress={callDriver}>
-                <Text style={styles.callBtnIcon}>📞</Text>
+                <Ionicons name="call" size={16} color="#fff" />
                 <Text style={styles.callBtnText}>Appeler</Text>
               </TouchableOpacity>
             )}
@@ -269,7 +270,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
                 <View style={styles.timelineLeft}>
                   <View style={[styles.dot, isDone && styles.dotDone, isCurrent && styles.dotCurrent]}>
                     {isDone
-                      ? <Text style={styles.dotCheck}>{isCurrent ? step.icon : '✓'}</Text>
+                      ? <Ionicons name={isCurrent ? step.iconName : 'checkmark'} size={14} color="#fff" />
                       : null
                     }
                   </View>
@@ -290,7 +291,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
                   {/* Bouton carte intégré à "En route" */}
                   {isCurrent && step.key === 'on_the_way' && !showMap && (
                     <TouchableOpacity style={styles.inlineMapBtn} onPress={() => setShowMap(true)}>
-                      <Text style={styles.inlineMapBtnText}>📍 Voir le livreur sur la carte</Text>
+                      <Text style={styles.inlineMapBtnText}><Ionicons name="location" size={14} color="#FF6B35" /> Voir le livreur sur la carte</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -302,12 +303,12 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* ── Adresse de livraison ── */}
         {order?.address && (
           <View style={styles.addressCard}>
-            <Text style={styles.addressIcon}>📍</Text>
+            <Ionicons name="location-outline" size={20} color="#FF6B35" />
             <View style={{ flex: 1 }}>
               <Text style={styles.addressLabel}>Livraison à</Text>
               <Text style={styles.addressValue}>{order.address.address}</Text>
               {order.address.phone && (
-                <Text style={styles.addressPhone}>📞 {order.address.phone}</Text>
+                <Text style={styles.addressPhone}><Ionicons name="call-outline" size={12} color="#888" /> {order.address.phone}</Text>
               )}
             </View>
           </View>
@@ -316,7 +317,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* ── Livré ── */}
         {order?.status === 'delivered' && (
           <View style={styles.deliveredSection}>
-            <Text style={styles.deliveredEmoji}>🎉</Text>
+            <Ionicons name="checkmark-done-circle" size={56} color="#22c55e" style={{ marginBottom: 12 }} />
             <Text style={styles.deliveredTitle}>Commande livrée !</Text>
             <Text style={styles.deliveredSub}>Bon appétit !</Text>
             <TouchableOpacity

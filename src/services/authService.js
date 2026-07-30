@@ -18,6 +18,26 @@ export const authService = {
     return { token, user };
   },
 
+  async googleLogin(idToken) {
+    const response = await api.post('/auth/google', { id_token: idToken });
+    const { token, user } = response.data;
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    return { token, user };
+  },
+
+  async appleLogin({ identityToken, fullName, email }) {
+    const response = await api.post('/auth/apple', {
+      identity_token: identityToken,
+      full_name: fullName,
+      email,
+    });
+    const { token, user } = response.data;
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    return { token, user };
+  },
+
   async logout() {
     try {
       await api.post('/auth/logout');

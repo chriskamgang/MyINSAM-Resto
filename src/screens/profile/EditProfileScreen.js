@@ -4,6 +4,7 @@ import {
   SafeAreaView, ScrollView, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
 
@@ -22,8 +23,8 @@ export default function EditProfileScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      const updated = await profileService.updateProfile({ name: name.trim(), phone: phone.trim() });
-      updateUser(updated);
+      const result = await profileService.updateProfile({ name: name.trim(), phone: phone.trim() });
+      updateUser(result.user || result);
       Alert.alert('Succès', 'Profil mis à jour !', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
       Alert.alert('Erreur', e.response?.data?.message || 'Impossible de mettre à jour le profil.');
@@ -41,7 +42,7 @@ export default function EditProfileScreen({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>←</Text>
+            <Ionicons name="arrow-back" size={22} color={COLORS.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Modifier le profil</Text>
           <View style={{ width: 40 }} />

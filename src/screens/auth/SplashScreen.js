@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SplashScreen({ navigation }) {
   const opacity = new Animated.Value(0);
@@ -11,19 +13,29 @@ export default function SplashScreen({ navigation }) {
       Animated.spring(scale,   { toValue: 1, friction: 5,   useNativeDriver: true }),
     ]).start();
 
-    const timer = setTimeout(() => {
-      navigation.replace('Onboarding');
-    }, 2500);
-
-    return () => clearTimeout(timer);
+    const checkOnboarding = async () => {
+      try {
+        const seen = await AsyncStorage.getItem('@onboarding_done');
+        setTimeout(() => {
+          if (seen) {
+            navigation.replace('Login');
+          } else {
+            navigation.replace('Onboarding');
+          }
+        }, 2500);
+      } catch {
+        setTimeout(() => navigation.replace('Onboarding'), 2500);
+      }
+    };
+    checkOnboarding();
   }, []);
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.logoBox, { opacity, transform: [{ scale }] }]}>
-        <Text style={styles.emoji}>🍔</Text>
-        <Text style={styles.title}>Mon Restaurant</Text>
-        <Text style={styles.subtitle}>Commandez. Savourez. Profitez.</Text>
+        <Ionicons name="restaurant" size={80} color="#fff" style={{ marginBottom: 16 }} />
+        <Text style={styles.title}>Estuaire Eat</Text>
+        <Text style={styles.subtitle}>Commandez et faites-vous livrer</Text>
       </Animated.View>
     </View>
   );

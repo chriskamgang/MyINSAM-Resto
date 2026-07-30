@@ -3,26 +3,28 @@ import {
   View, Text, StyleSheet, FlatList, Dimensions,
   TouchableOpacity, Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 const slides = [
   {
-    id: '1', emoji: '🍔',
-    title: 'Commandez facilement',
-    description: 'Parcourez notre menu, choisissez vos plats préférés et commandez en quelques secondes.',
+    id: '1', iconName: 'storefront',
+    title: 'Tous vos restos favoris',
+    description: 'Explorez les meilleurs restaurants de Bafoussam et trouvez ce qui vous fait envie.',
     bg: '#FF6B35',
   },
   {
-    id: '2', emoji: '⚡',
-    title: 'Livraison rapide',
-    description: 'Vos plats livrés chauds à votre porte en moins de 40 minutes.',
+    id: '2', iconName: 'cart',
+    title: 'Commandez en 2 clics',
+    description: 'Choisissez vos plats, personnalisez vos options et commandez en quelques secondes.',
     bg: '#FF8C42',
   },
   {
-    id: '3', emoji: '📍',
-    title: 'Suivi en temps réel',
-    description: 'Suivez votre livreur en direct sur la carte jusqu\'à votre porte.',
+    id: '3', iconName: 'bicycle',
+    title: 'Livraison express',
+    description: 'Suivez votre livreur en temps reel et recevez vos plats chauds a votre porte.',
     bg: '#FF6B35',
   },
 ];
@@ -31,18 +33,19 @@ export default function OnboardingScreen({ navigation }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
 
-  const next = () => {
+  const next = async () => {
     if (currentIndex < slides.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
       setCurrentIndex(currentIndex + 1);
     } else {
+      await AsyncStorage.setItem('@onboarding_done', 'true');
       navigation.replace('Login');
     }
   };
 
   const renderItem = ({ item }) => (
     <View style={[styles.slide, { width, backgroundColor: item.bg }]}>
-      <Text style={styles.emoji}>{item.emoji}</Text>
+      <Ionicons name={item.iconName} size={100} color="#fff" style={styles.emoji} />
       <Text style={styles.title}>{item.title}</Text>
       <Text style={styles.description}>{item.description}</Text>
     </View>
@@ -76,7 +79,10 @@ export default function OnboardingScreen({ navigation }) {
 
       {/* Boutons */}
       <View style={styles.footer}>
-        <TouchableOpacity onPress={() => navigation.replace('Login')}>
+        <TouchableOpacity onPress={async () => {
+          await AsyncStorage.setItem('@onboarding_done', 'true');
+          navigation.replace('Login');
+        }}>
           <Text style={styles.skip}>Passer</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.nextBtn} onPress={next}>

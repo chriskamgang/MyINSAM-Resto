@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, Alert,
+  SafeAreaView, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { orderService } from '../../services/orderService';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 
 const STATUS_STEPS = [
-  { key: 'pending',    label: 'En attente',       icon: '⏳' },
-  { key: 'confirmed',  label: 'Confirmée',         icon: '✅' },
-  { key: 'preparing',  label: 'En préparation',    icon: '🍳' },
-  { key: 'ready',      label: 'Prête',             icon: '📦' },
-  { key: 'picked_up',  label: 'Récupérée',         icon: '🚚' },
-  { key: 'on_the_way', label: 'En livraison',      icon: '🛵' },
-  { key: 'delivered',  label: 'Livrée',            icon: '🏠' },
+  { key: 'pending',    label: 'En attente',       iconName: 'time-outline' },
+  { key: 'confirmed',  label: 'Confirmée',         iconName: 'checkmark-circle-outline' },
+  { key: 'preparing',  label: 'En préparation',    iconName: 'restaurant-outline' },
+  { key: 'ready',      label: 'Prête',             iconName: 'cube-outline' },
+  { key: 'picked_up',  label: 'Récupérée',         iconName: 'car-outline' },
+  { key: 'on_the_way', label: 'En livraison',      iconName: 'bicycle-outline' },
+  { key: 'delivered',  label: 'Livrée',            iconName: 'home-outline' },
 ];
 
 const STATUS_CONFIG = {
@@ -36,24 +38,34 @@ const PAYMENT_LABELS = {
 
 export default function OrderDetailScreen({ route, navigation }) {
   const { orderId } = route.params;
-  const [order, setOrder]   = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [order, setOrder]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadOrder();
-  }, [orderId]);
-
-  const loadOrder = async () => {
+  const loadOrder = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await orderService.getOrder(orderId);
       setOrder(data);
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de charger la commande.');
-      navigation.goBack();
+      if (!silent) {
+        Alert.alert('Erreur', 'Impossible de charger la commande.');
+        navigation.goBack();
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [orderId]);
+
+  // Auto-refresh toutes les 15s pour les commandes actives
+  useFocusEffect(useCallback(() => {
+    loadOrder();
+    const interval = setInterval(() => loadOrder(true), 15000);
+    return () => clearInterval(interval);
+  }, [loadOrder]));
+
+  const onRefresh = () => { setRefreshing(true); loadOrder(); };
 
   const handleCancel = () => {
     Alert.alert(
@@ -103,11 +115,15 @@ export default function OrderDetailScreen({ route, navigation }) {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+      >
         {/* Statut */}
         <View style={[styles.statusCard, { backgroundColor: statusConf.bg }]}>
           <Text style={[styles.statusLabel, { color: statusConf.color }]}>
-            {STATUS_STEPS.find(s => s.key === order.status)?.icon} {' '}
+            <Ionicons name={STATUS_STEPS.find(s => s.key === order.status)?.iconName || 'help-outline'} size={16} color={statusConf.color} /> {' '}
             {STATUS_STEPS.find(s => s.key === order.status)?.label || order.status}
           </Text>
           <Text style={styles.statusDate}>{date}</Text>
@@ -138,7 +154,7 @@ export default function OrderDetailScreen({ route, navigation }) {
                     isCurrent && { color: COLORS.primary, fontWeight: '700' },
                     !isDone && { color: '#ccc' },
                   ]}>
-                    {step.icon} {step.label}
+                    <Ionicons name={step.iconName} size={14} color={isCurrent ? COLORS.primary : isDone ? COLORS.text : '#ccc'} /> {step.label}
                   </Text>
                 </View>
               );
@@ -189,7 +205,7 @@ export default function OrderDetailScreen({ route, navigation }) {
         <View style={styles.infoCard}>
           {order.address && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📍</Text>
+              <Ionicons name="location-outline" size={18} color="#FF6B35" style={{ marginRight: 10 }} />
               <View>
                 <Text style={styles.infoLabel}>Adresse de livraison</Text>
                 <Text style={styles.infoValue}>{order.address.address}</Text>
@@ -197,7 +213,7 @@ export default function OrderDetailScreen({ route, navigation }) {
             </View>
           )}
           <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>💳</Text>
+            <Ionicons name="card-outline" size={18} color="#FF6B35" style={{ marginRight: 10 }} />
             <View>
               <Text style={styles.infoLabel}>Paiement</Text>
               <Text style={styles.infoValue}>{PAYMENT_LABELS[order.payment_method] || order.payment_method}</Text>
@@ -205,7 +221,7 @@ export default function OrderDetailScreen({ route, navigation }) {
           </View>
           {order.special_instructions && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📝</Text>
+              <Ionicons name="document-text-outline" size={18} color="#FF6B35" style={{ marginRight: 10 }} />
               <View>
                 <Text style={styles.infoLabel}>Note</Text>
                 <Text style={styles.infoValue}>{order.special_instructions}</Text>
@@ -221,7 +237,7 @@ export default function OrderDetailScreen({ route, navigation }) {
               style={styles.trackBtn}
               onPress={() => navigation.navigate('OrderTracking', { orderId: order.id })}
             >
-              <Text style={styles.trackBtnText}>📍 Suivre la livraison</Text>
+              <Text style={styles.trackBtnText}><Ionicons name="location" size={14} color="#fff" /> Suivre la livraison</Text>
             </TouchableOpacity>
           )}
           {canCancel && (

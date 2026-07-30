@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { Ionicons } from '@expo/vector-icons';
 import { profileService } from '../../services/profileService';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
@@ -221,14 +222,14 @@ export default function AddAddressScreen({ route, navigation }) {
             <TouchableOpacity style={styles.gpsBtn} onPress={handleGPS} disabled={locating}>
               {locating
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.gpsBtnText}>📍 Me livrer ici</Text>
+                : <Text style={styles.gpsBtnText}><Ionicons name="location" size={14} color="#fff" /> Me livrer ici</Text>
               }
             </TouchableOpacity>
           </View>
 
           {/* ── SEARCH ── */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>🔍 Chercher une adresse</Text>
+            <Text style={styles.sectionLabel}><Ionicons name="search" size={14} color="#1a1a1a" /> Chercher une adresse</Text>
             <View style={styles.searchRow}>
               <TextInput
                 style={styles.searchInput}
@@ -265,7 +266,7 @@ export default function AddAddressScreen({ route, navigation }) {
           {/* ── ADDRESS PREVIEW ── */}
           {addressText ? (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>📍 Adresse sélectionnée</Text>
+              <Text style={styles.sectionLabel}><Ionicons name="location" size={14} color="#1a1a1a" /> Adresse sélectionnée</Text>
               <View style={styles.addressPreview}>
                 <Text style={styles.addressPreviewText}>{addressText}</Text>
               </View>
@@ -298,7 +299,7 @@ export default function AddAddressScreen({ route, navigation }) {
 
           {/* ── PHONE ── */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>📞 Numéro à appeler</Text>
+            <Text style={styles.sectionLabel}><Ionicons name="call-outline" size={14} color="#1a1a1a" /> Numéro à appeler</Text>
             <TextInput
               style={styles.input}
               value={phone}

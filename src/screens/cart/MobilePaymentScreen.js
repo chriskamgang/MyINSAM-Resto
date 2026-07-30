@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
   TextInput, ActivityIndicator, Alert, Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { paymentService } from '../../services/paymentService';
 import { useCart } from '../../context/CartContext';
 
@@ -31,7 +32,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
 
   // Animation pulsation quand on attend la confirmation
   useEffect(() => {
-    if (payment && paymentStatus === 'pending') {
+    if (payment && paymentStatus && paymentStatus.toLowerCase() === 'pending') {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.1, duration: 800, useNativeDriver: true }),
@@ -44,7 +45,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
 
   // Polling du statut du paiement
   useEffect(() => {
-    if (payment && paymentStatus === 'pending') {
+    if (payment && paymentStatus && paymentStatus.toLowerCase() === 'pending') {
       checkInterval.current = setInterval(async () => {
         await checkStatus();
       }, 5000); // Vérifier toutes les 5 secondes
@@ -94,7 +95,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
       if (result.payment.status === 'completed') {
         clearInterval(checkInterval.current);
         Alert.alert(
-          'Paiement réussi ! ✅',
+          'Paiement réussi !',
           'Votre commande a été payée avec succès.',
           [
             {
@@ -125,7 +126,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
   };
 
   const methodLabel = paymentMethod === 'mtn_momo' ? 'MTN Mobile Money' : 'Orange Money';
-  const methodIcon = paymentMethod === 'mtn_momo' ? '📱' : '🍊';
+  const methodIconName = paymentMethod === 'mtn_momo' ? 'phone-portrait-outline' : 'phone-portrait-outline';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -141,7 +142,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
       <View style={styles.content}>
         {/* Icône et titre */}
         <View style={styles.heroSection}>
-          <Text style={styles.methodIcon}>{methodIcon}</Text>
+          <Ionicons name={methodIconName} size={56} color={COLORS.primary} style={{ marginBottom: 12 }} />
           <Text style={styles.methodTitle}>{methodLabel}</Text>
           <Text style={styles.methodDesc}>
             Montant à payer: <Text style={styles.amountText}>{Number(order.total_amount || order.total).toLocaleString('fr-FR')} XAF</Text>
@@ -180,10 +181,10 @@ export default function MobilePaymentScreen({ route, navigation }) {
         ) : (
           // Statut du paiement
           <View style={styles.statusSection}>
-            {paymentStatus === 'pending' && (
+            {paymentStatus && paymentStatus.toLowerCase() === 'pending' && (
               <>
                 <Animated.View style={[styles.statusIcon, { transform: [{ scale: pulseAnim }] }]}>
-                  <Text style={styles.statusIconText}>⏳</Text>
+                  <Ionicons name="time-outline" size={40} color={COLORS.primary} />
                 </Animated.View>
                 <Text style={styles.statusTitle}>En attente de confirmation</Text>
                 <Text style={styles.statusDesc}>
@@ -200,7 +201,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
             {paymentStatus === 'completed' && (
               <>
                 <View style={styles.statusIcon}>
-                  <Text style={styles.statusIconText}>✅</Text>
+                  <Ionicons name="checkmark-circle" size={40} color={COLORS.success} />
                 </View>
                 <Text style={[styles.statusTitle, { color: COLORS.success }]}>Paiement réussi !</Text>
                 <Text style={styles.statusDesc}>Votre commande a été payée avec succès</Text>
@@ -210,7 +211,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
             {(paymentStatus === 'failed' || paymentStatus === 'cancelled') && (
               <>
                 <View style={styles.statusIcon}>
-                  <Text style={styles.statusIconText}>❌</Text>
+                  <Ionicons name="close-circle" size={40} color="#EF4444" />
                 </View>
                 <Text style={[styles.statusTitle, { color: '#EF4444' }]}>Paiement échoué</Text>
                 <Text style={styles.statusDesc}>

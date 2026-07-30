@@ -5,18 +5,15 @@ import {
 } from 'react-native';
 import { useCart } from '../../context/CartContext';
 import { orderService } from '../../services/orderService';
+import { Ionicons } from '@expo/vector-icons';
 import { profileService } from '../../services/profileService';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 
-// Coordonnées du restaurant (Évêché Macambou, Bafoussam)
-const RESTAURANT_LAT = 5.4720;
-const RESTAURANT_LON = 10.4180;
-
 // Calcule le temps de livraison via OSRM (routing OpenStreetMap)
-async function getDeliveryMinutes(clientLat, clientLon) {
+async function getDeliveryMinutes(clientLat, clientLon, restLat = 5.4720, restLon = 10.4180) {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${RESTAURANT_LON},${RESTAURANT_LAT};${clientLon},${clientLat}?overview=false`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${restLon},${restLat};${clientLon},${clientLat}?overview=false`;
     const res  = await fetch(url);
     const data = await res.json();
     if (data.code === 'Ok' && data.routes?.length > 0) {
@@ -30,13 +27,13 @@ async function getDeliveryMinutes(clientLat, clientLon) {
 }
 
 const PAYMENT_METHODS = [
-  { key: 'cash',        label: 'Espèces',          icon: '💵', desc: 'Payer à la livraison' },
-  { key: 'mtn_momo',   label: 'MTN Mobile Money',  icon: '📱', desc: 'Paiement mobile MTN' },
-  { key: 'orange_money',label: 'Orange Money',      icon: '🍊', desc: 'Paiement mobile Orange' },
+  { key: 'cash',        label: 'Espèces',          iconName: 'cash-outline', desc: 'Payer à la livraison' },
+  { key: 'mtn_momo',   label: 'MTN Mobile Money',  iconName: 'phone-portrait-outline', desc: 'Paiement mobile MTN' },
+  { key: 'orange_money',label: 'Orange Money',      iconName: 'phone-portrait-outline', desc: 'Paiement mobile Orange' },
 ];
 
 export default function CheckoutScreen({ navigation }) {
-  const { items, subtotal, deliveryFee, discount, total, coupon, clearCart } = useCart();
+  const { items, subtotal, deliveryFee, discount, total, coupon, clearCart, restaurant: cartRestaurant } = useCart();
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -129,7 +126,7 @@ export default function CheckoutScreen({ navigation }) {
       }
 
       const orderData = {
-        restaurant_id: 1, // Application mono-restaurant
+        restaurant_id: cartRestaurant?.id || 1,
         address_id: addressId,
         payment_method: paymentMethod,
         special_instructions: note.trim() || null,
@@ -137,6 +134,7 @@ export default function CheckoutScreen({ navigation }) {
         items: items.map(item => ({
           menu_item_id: item.id,
           quantity: item.quantity,
+          selected_options: item.selected_options || null,
         })),
       };
 
@@ -148,7 +146,9 @@ export default function CheckoutScreen({ navigation }) {
       if (selectedAddress?.latitude && selectedAddress?.longitude) {
         deliveryMinutes = await getDeliveryMinutes(
           parseFloat(selectedAddress.latitude),
-          parseFloat(selectedAddress.longitude)
+          parseFloat(selectedAddress.longitude),
+          cartRestaurant?.latitude ? parseFloat(cartRestaurant.latitude) : undefined,
+          cartRestaurant?.longitude ? parseFloat(cartRestaurant.longitude) : undefined
         );
       }
 
@@ -183,7 +183,7 @@ export default function CheckoutScreen({ navigation }) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
         {/* Adresse de livraison */}
-        <Text style={styles.sectionTitle}>📍 Adresse de livraison</Text>
+        <Text style={styles.sectionTitle}><Ionicons name="location-outline" size={16} color="#1a1a1a" /> Adresse de livraison</Text>
         {loadingAddresses ? (
           <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 16 }} />
         ) : addresses.length === 0 ? (
@@ -209,7 +209,7 @@ export default function CheckoutScreen({ navigation }) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.addressLabel}>Adresse rapide</Text>
                   <Text style={styles.addressValue}>{selectedAddress.address}</Text>
-                  {selectedAddress.phone && <Text style={styles.addressPhone}>📞 {selectedAddress.phone}</Text>}
+                  {selectedAddress.phone && <Text style={styles.addressPhone}><Ionicons name="call-outline" size={12} color="#888" /> {selectedAddress.phone}</Text>}
                 </View>
                 <TouchableOpacity onPress={() => setSelectedAddress(null)}>
                   <Text style={{ color: COLORS.primary, fontSize: 20 }}>✕</Text>
@@ -232,7 +232,7 @@ export default function CheckoutScreen({ navigation }) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.addressLabel}>{addr.label || 'Adresse'}</Text>
                   <Text style={styles.addressValue}>{addr.address}</Text>
-                  {addr.phone && <Text style={styles.addressPhone}>📞 {addr.phone}</Text>}
+                  {addr.phone && <Text style={styles.addressPhone}><Ionicons name="call-outline" size={12} color="#888" /> {addr.phone}</Text>}
                   {addr.is_default && <Text style={styles.defaultBadge}>Par défaut</Text>}
                 </View>
               </TouchableOpacity>
@@ -245,7 +245,7 @@ export default function CheckoutScreen({ navigation }) {
                   style={[styles.addMoreAddress, { flex: 1 }]}
                   onPress={() => setShowQuickAddress(true)}
                 >
-                  <Text style={styles.addMoreAddressText}>✏️ Saisir une adresse</Text>
+                  <Text style={styles.addMoreAddressText}><Ionicons name="create-outline" size={14} color="#FF6B35" /> Saisir une adresse</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.addMoreAddress, { flex: 1 }]}
@@ -309,14 +309,14 @@ export default function CheckoutScreen({ navigation }) {
         )}
 
         {/* Mode de paiement */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>💳 Mode de paiement</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}><Ionicons name="card-outline" size={16} color="#1a1a1a" /> Mode de paiement</Text>
         {PAYMENT_METHODS.map(pm => (
           <TouchableOpacity
             key={pm.key}
             style={[styles.payCard, paymentMethod === pm.key && styles.payCardSelected]}
             onPress={() => setPaymentMethod(pm.key)}
           >
-            <Text style={styles.payIcon}>{pm.icon}</Text>
+            <Ionicons name={pm.iconName} size={24} color={paymentMethod === pm.key ? '#FF6B35' : '#888'} />
             <View style={{ flex: 1 }}>
               <Text style={styles.payLabel}>{pm.label}</Text>
               <Text style={styles.payDesc}>{pm.desc}</Text>
@@ -328,7 +328,7 @@ export default function CheckoutScreen({ navigation }) {
         ))}
 
         {/* Note */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>📝 Note (optionnel)</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}><Ionicons name="document-text-outline" size={16} color="#1a1a1a" /> Note (optionnel)</Text>
         <TextInput
           style={styles.noteInput}
           placeholder="Instructions particulières pour la préparation ou la livraison..."
@@ -341,7 +341,7 @@ export default function CheckoutScreen({ navigation }) {
         />
 
         {/* Récap commande */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>🧾 Récapitulatif</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}><Ionicons name="receipt-outline" size={16} color="#1a1a1a" /> Récapitulatif</Text>
         <View style={styles.summaryCard}>
           {items.map(item => (
             <View key={item.id} style={styles.summaryRow}>

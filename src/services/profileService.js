@@ -50,4 +50,9 @@ export const profileService = {
     const response = await api.post(`/profile/addresses/${id}/default`);
     return response.data;
   },
+
+  async deleteAccount() {
+    const response = await api.delete('/account');
+    return response.data;
+  },
 };

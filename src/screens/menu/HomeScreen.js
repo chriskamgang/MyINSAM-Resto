@@ -66,7 +66,7 @@ function RestaurantCard({ restaurant, onPress }) {
         </View>
 
         {restaurant.description ? (
-          <Text style={styles.cardDesc} numberOfLines={1}>{restaurant.description}</Text>
+          <Text style={styles.cardDesc}>{restaurant.description}</Text>
         ) : null}
 
         <View style={styles.cardMeta}>
@@ -312,11 +312,11 @@ export default function HomeScreen({ navigation }) {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.featuredScroll}
-                  snapToInterval={width * 0.65 + 14}
+                  snapToInterval={width * 0.75 + 14}
                   decelerationRate="fast"
                   getItemLayout={(_, index) => ({
-                    length: width * 0.65 + 14,
-                    offset: (width * 0.65 + 14) * index,
+                    length: width * 0.75 + 14,
+                    offset: (width * 0.75 + 14) * index,
                     index,
                   })}
                   onScrollBeginDrag={() => { featuredIndex.current = -1; }}
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   featuredSection: { marginTop: 20 },
   featuredScroll: { paddingHorizontal: 20, gap: 14 },
   featuredCard: {
-    width: width * 0.65, height: 160,
+    width: width * 0.75, height: 200,
     borderRadius: 20, overflow: 'hidden',
     backgroundColor: COLORS.card,
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08, shadowRadius: 10, elevation: 3,
   },
-  cardImageBox: { width: '100%', height: 150, position: 'relative' },
+  cardImageBox: { width: '100%', height: 200, position: 'relative' },
   cardImage: { width: '100%', height: '100%' },
   cardImagePlaceholder: {
     width: '100%', height: '100%',

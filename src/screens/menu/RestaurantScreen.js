@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, RefreshControl, ActivityIndicator, Image,
-  SafeAreaView, Dimensions,
+  SafeAreaView, Dimensions, Modal, StatusBar, FlatList, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { restaurantService } from '../../services/restaurantService';
@@ -32,6 +32,7 @@ function MenuItemCard({ item, onPress, onAdd }) {
   const discountPercent = hasPromo ? Math.round(((item.price - item.discount_price) / item.price) * 100) : 0;
   const imageUrl = getImageUrl(item.image);
   const [imgError, setImgError] = React.useState(false);
+  const imageCount = 1 + (Array.isArray(item.images) ? item.images.length : 0);
 
   return (
     <TouchableOpacity style={styles.itemCard} onPress={() => onPress(item)} activeOpacity={0.85}>
@@ -46,6 +47,12 @@ function MenuItemCard({ item, onPress, onAdd }) {
         {hasPromo && (
           <View style={styles.promoBadge}>
             <Text style={styles.promoText}>-{discountPercent}%</Text>
+          </View>
+        )}
+        {imageCount > 1 && (
+          <View style={styles.itemPhotoBadge}>
+            <Ionicons name="images-outline" size={12} color="#fff" />
+            <Text style={styles.itemPhotoBadgeText}>{imageCount}</Text>
           </View>
         )}
       </View>
@@ -89,11 +96,14 @@ export default function RestaurantScreen({ route, navigation }) {
   const [activeCategory, setActiveCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
   const loadMenu = useCallback(async () => {
     try {
       const data = await restaurantService.getMenu(routeRestaurant.id);
-      if (data.restaurant) setRestaurant(data.restaurant);
+      // Fusionner pour ne pas écraser description, photos, cover_image, etc.
+      if (data.restaurant) setRestaurant(prev => ({ ...prev, ...data.restaurant }));
       setCategories(data.menu || []);
       if (data.menu?.length > 0 && !activeCategory) setActiveCategory(data.menu[0].id);
     } catch (e) {
@@ -141,7 +151,16 @@ export default function RestaurantScreen({ route, navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
       >
         {/* ── Hero image ── */}
-        <View style={styles.heroImageBox}>
+        <TouchableOpacity
+          style={styles.heroImageBox}
+          activeOpacity={0.9}
+          onPress={() => {
+            if (restaurant.photos && restaurant.photos.length > 0) {
+              setSelectedPhotoIndex(0);
+              setPhotoModalVisible(true);
+            }
+          }}
+        >
           {coverUrl && !coverError ? (
             <Image source={{ uri: coverUrl }} style={styles.heroImage} resizeMode="cover" onError={() => setCoverError(true)} />
           ) : (
@@ -149,7 +168,13 @@ export default function RestaurantScreen({ route, navigation }) {
               <Ionicons name="restaurant" size={60} color={COLORS.lightGray} />
             </View>
           )}
-        </View>
+          {restaurant.photos && restaurant.photos.length > 0 && (
+            <View style={styles.photoCountBadge}>
+              <Ionicons name="images-outline" size={14} color="#fff" />
+              <Text style={styles.photoCountText}>{restaurant.photos.length} photos</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* ── Infos restaurant ── */}
         <View style={styles.restaurantInfo}>
@@ -180,6 +205,68 @@ export default function RestaurantScreen({ route, navigation }) {
               <Text style={[styles.chipText, { color: COLORS.success }]}>Ouvert</Text>
             </View>
           </View>
+        </View>
+
+        {/* ── Galerie photos ── */}
+        {restaurant.photos && restaurant.photos.length > 0 && (
+          <View style={styles.gallerySection}>
+            <Text style={styles.gallerySectionTitle}>Photos</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryScroll}>
+              {restaurant.photos.map((photo, index) => {
+                const photoUrl = getImageUrl(photo);
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => { setSelectedPhotoIndex(index); setPhotoModalVisible(true); }}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri: photoUrl }} style={styles.galleryThumb} resizeMode="cover" />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ── Video ── */}
+        {restaurant.video_url ? (
+          <TouchableOpacity
+            style={styles.videoBtn}
+            onPress={() => Linking.openURL(getImageUrl(restaurant.video_url))}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="play-circle" size={24} color="#fff" />
+            <Text style={styles.videoBtnText}>Voir la video du restaurant</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* ── Détails restaurant ── */}
+        <View style={styles.detailsSection}>
+          {restaurant.address && (
+            <View style={styles.detailRow}>
+              <Ionicons name="location-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.detailText}>{restaurant.address}{restaurant.city ? `, ${restaurant.city}` : ''}</Text>
+            </View>
+          )}
+          {restaurant.email && (
+            <View style={styles.detailRow}>
+              <Ionicons name="mail-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.detailText}>{restaurant.email}</Text>
+            </View>
+          )}
+          {restaurant.opening_hours && (
+            <View style={styles.detailRow}>
+              <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.detailText}>
+                {Array.isArray(restaurant.opening_hours)
+                  ? restaurant.opening_hours.join(' • ')
+                  : typeof restaurant.opening_hours === 'object'
+                    ? Object.entries(restaurant.opening_hours).map(([day, hours]) => `${day}: ${hours}`).join('\n')
+                    : String(restaurant.opening_hours)
+                }
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* ── Loading ── */}
@@ -241,6 +328,35 @@ export default function RestaurantScreen({ route, navigation }) {
         <View style={{ height: 120 }} />
       </ScrollView>
 
+      {/* ── Modal photos plein écran ── */}
+      <Modal visible={photoModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoModalVisible(false)}>
+        <View style={styles.photoModal}>
+          <StatusBar barStyle="light-content" />
+          <TouchableOpacity style={styles.photoModalClose} onPress={() => setPhotoModalVisible(false)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.photoModalCounter}>
+            {selectedPhotoIndex + 1} / {(restaurant.photos || []).length}
+          </Text>
+          <FlatList
+            data={restaurant.photos || []}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={selectedPhotoIndex}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            onMomentumScrollEnd={e => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+              setSelectedPhotoIndex(idx);
+            }}
+            keyExtractor={(_, i) => String(i)}
+            renderItem={({ item }) => (
+              <Image source={{ uri: getImageUrl(item) }} style={{ width, height: '100%' }} resizeMode="contain" />
+            )}
+          />
+        </View>
+      </Modal>
+
       {/* ── Bouton panier flottant ── */}
       {totalItems > 0 && cartRestaurant?.id === restaurant.id && (
         <View style={styles.floatingCartBar}>
@@ -277,7 +393,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
 
   // ── Hero ──
-  heroImageBox: { width: '100%', height: 200 },
+  heroImageBox: { width: '100%', height: 300 },
   heroImage: { width: '100%', height: '100%' },
   heroPlaceholder: { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
 
@@ -327,7 +443,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08, shadowRadius: 10, elevation: 3,
   },
-  itemImageBox: { width: '100%', height: 140, position: 'relative' },
+  itemImageBox: { width: '100%', height: 240, position: 'relative' },
   itemImage: { width: '100%', height: '100%' },
   itemPlaceholder: {
     width: '100%', height: '100%',
@@ -338,6 +454,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
   },
   promoText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  itemPhotoBadge: {
+    position: 'absolute', bottom: 10, right: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10,
+  },
+  itemPhotoBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   itemInfo: { padding: 14 },
   itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
   itemName: { flex: 1, fontSize: 16, fontWeight: '700', color: COLORS.text },
@@ -376,4 +499,66 @@ const styles = StyleSheet.create({
   },
   floatingCartBadgeText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   floatingCartText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // ── Gallery ──
+  gallerySection: {
+    backgroundColor: COLORS.card,
+    paddingVertical: 16,
+    marginBottom: 8,
+  },
+  gallerySectionTitle: {
+    fontSize: 16, fontWeight: '700', color: COLORS.text,
+    paddingHorizontal: 20, marginBottom: 12,
+  },
+  galleryScroll: { paddingHorizontal: 20, gap: 10 },
+  galleryThumb: {
+    width: 160, height: 120, borderRadius: 12,
+  },
+
+  // ── Video button ──
+  videoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.primary, marginHorizontal: 20, marginBottom: 8,
+    paddingVertical: 14, borderRadius: 14,
+  },
+  videoBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  // ── Details ──
+  detailsSection: {
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 20, paddingVertical: 16,
+    marginBottom: 8, gap: 12,
+  },
+  detailRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+  },
+  detailText: {
+    flex: 1, fontSize: 14, color: COLORS.gray, lineHeight: 20,
+  },
+
+  // ── Photo badge on hero ──
+  photoCountBadge: {
+    position: 'absolute', bottom: 12, right: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16,
+  },
+  photoCountText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+
+  // ── Photo modal ──
+  photoModal: {
+    flex: 1, backgroundColor: '#000',
+    justifyContent: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute', top: 50, right: 20, zIndex: 10,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  photoModalCounter: {
+    position: 'absolute', top: 58, left: 0, right: 0,
+    textAlign: 'center', color: '#fff', fontSize: 14, fontWeight: '600',
+    zIndex: 10,
+  },
 });

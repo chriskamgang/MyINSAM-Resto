@@ -1,0 +1,44 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B35"/>
+      <stop offset="100%" style="stop-color:#FF8E53"/>
+    </linearGradient>
+    <linearGradient id="plate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95"/>
+      <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:0.9"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+
+  <!-- Decorative circle (plate) -->
+  <circle cx="512" cy="460" r="260" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="8"/>
+  <circle cx="512" cy="460" r="200" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="4"/>
+
+  <!-- Fork icon left -->
+  <g transform="translate(340, 300)" fill="rgba(255,255,255,0.9)">
+    <rect x="0" y="0" width="8" height="120" rx="4"/>
+    <rect x="20" y="0" width="8" height="120" rx="4"/>
+    <rect x="40" y="0" width="8" height="120" rx="4"/>
+    <rect x="-4" y="110" width="56" height="16" rx="8"/>
+    <rect x="16" y="120" width="16" height="80" rx="8"/>
+  </g>
+
+  <!-- Knife icon right -->
+  <g transform="translate(640, 300)" fill="rgba(255,255,255,0.9)">
+    <path d="M0,0 Q25,-10 30,100 L30,120 L16,120 L16,200 L0,200 L0,120 L-14,120 L-14,100 Q-10,50 0,0 Z"/>
+  </g>
+
+  <!-- Main text "RE" -->
+  <text x="512" y="500" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="280" fill="white" letter-spacing="-10">RE</text>
+
+  <!-- Subtitle -->
+  <text x="512" y="620" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="56" fill="rgba(255,255,255,0.9)" letter-spacing="8">ESTUAIRE</text>
+
+  <!-- Bottom line -->
+  <rect x="350" y="660" width="324" height="4" rx="2" fill="rgba(255,255,255,0.5)"/>
+
+  <!-- Bottom text -->
+  <text x="512" y="720" text-anchor="middle" font-family="Arial, sans-serif" font-weight="600" font-size="40" fill="rgba(255,255,255,0.7)" letter-spacing="4">RESTAURANT</text>
+</svg>

@@ -3,24 +3,25 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { orderService } from '../../services/orderService';
 import { useFocusEffect } from '@react-navigation/native';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
 
 const STATUS_CONFIG = {
-  pending:    { label: 'En attente',     color: '#f59e0b', bg: '#fef3c7', icon: '⏳' },
-  confirmed:  { label: 'Confirmée',      color: '#3b82f6', bg: '#dbeafe', icon: '✅' },
-  preparing:  { label: 'En préparation', color: '#8b5cf6', bg: '#ede9fe', icon: '🍳' },
-  ready:      { label: 'Prête',          color: '#10b981', bg: '#d1fae5', icon: '📦' },
-  picked_up:  { label: 'Récupérée',      color: '#FF6B35', bg: '#FFF3E0', icon: '🚚' },
-  on_the_way: { label: 'En livraison',   color: '#FF6B35', bg: '#FFF3E0', icon: '🛵' },
-  delivered:  { label: 'Livrée',         color: '#22c55e', bg: '#f0fdf4', icon: '✅' },
-  cancelled:  { label: 'Annulée',        color: '#ef4444', bg: '#fee2e2', icon: '❌' },
+  pending:    { label: 'En attente',     color: '#f59e0b', bg: '#fef3c7', iconName: 'time-outline' },
+  confirmed:  { label: 'Confirmée',      color: '#3b82f6', bg: '#dbeafe', iconName: 'checkmark-circle-outline' },
+  preparing:  { label: 'En préparation', color: '#8b5cf6', bg: '#ede9fe', iconName: 'restaurant-outline' },
+  ready:      { label: 'Prête',          color: '#10b981', bg: '#d1fae5', iconName: 'cube-outline' },
+  picked_up:  { label: 'Récupérée',      color: '#FF6B35', bg: '#FFF3E0', iconName: 'car-outline' },
+  on_the_way: { label: 'En livraison',   color: '#FF6B35', bg: '#FFF3E0', iconName: 'bicycle-outline' },
+  delivered:  { label: 'Livrée',         color: '#22c55e', bg: '#f0fdf4', iconName: 'checkmark-done-circle-outline' },
+  cancelled:  { label: 'Annulée',        color: '#ef4444', bg: '#fee2e2', iconName: 'close-circle-outline' },
 };
 
 function OrderCard({ order, onPress }) {
-  const status = STATUS_CONFIG[order.status] || { label: order.status, color: COLORS.gray, bg: '#f0f0f0', icon: '?' };
+  const status = STATUS_CONFIG[order.status] || { label: order.status, color: COLORS.gray, bg: '#f0f0f0', iconName: 'help-outline' };
   const date = new Date(order.created_at).toLocaleDateString('fr-FR', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
@@ -33,7 +34,7 @@ function OrderCard({ order, onPress }) {
           <Text style={styles.orderDate}>{date}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-          <Text style={[styles.statusText, { color: status.color }]}>{status.icon} {status.label}</Text>
+          <Text style={[styles.statusText, { color: status.color }]}><Ionicons name={status.iconName} size={12} color={status.color} /> {status.label}</Text>
         </View>
       </View>
 
@@ -92,10 +93,10 @@ export default function OrdersScreen({ navigation }) {
 
       {orders.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📦</Text>
+          <Ionicons name="receipt-outline" size={70} color="#ccc" style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Aucune commande</Text>
           <Text style={styles.emptySubtitle}>Vos commandes apparaîtront ici</Text>
-          <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.navigate('Main', { screen: 'Menu' })}>
+          <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.navigate('Main', { screen: 'Accueil' })}>
             <Text style={styles.menuBtnText}>Commander maintenant</Text>
           </TouchableOpacity>
         </View>

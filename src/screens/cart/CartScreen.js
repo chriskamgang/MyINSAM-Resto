@@ -3,17 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, TextInput, Alert, Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../../context/CartContext';
+import { getImageUrl } from '../../services/api';
 
 const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
-
-const SERVER_URL = 'https://restaurant.iues-insambot.com';
-
-function getImageUrl(image) {
-  if (!image) return null;
-  if (image.startsWith('http://') || image.startsWith('https://')) return image;
-  return `${SERVER_URL}${image.startsWith('/') ? '' : '/'}${image}`;
-}
 
 function CartItem({ item, onIncrease, onDecrease, onDelete }) {
   const unitPrice = item.effective_price || item.price;
@@ -24,18 +18,23 @@ function CartItem({ item, onIncrease, onDecrease, onDelete }) {
       <View style={styles.itemImageBox}>
         {imageUrl && !imgError
           ? <Image source={{ uri: imageUrl }} style={styles.itemImage} onError={() => setImgError(true)} />
-          : <Text style={styles.itemPlaceholder}>🍽️</Text>
+          : <Ionicons name="restaurant-outline" size={40} color="#ccc" style={styles.itemPlaceholder} />
         }
       </View>
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+        {item.selected_options && Object.keys(item.selected_options).length > 0 && (
+          <Text style={styles.itemOptions} numberOfLines={2}>
+            {Object.values(item.selected_options).flat().map(o => o.name).join(', ')}
+          </Text>
+        )}
         <Text style={styles.itemPrice}>{Number(unitPrice).toLocaleString('fr-FR')} XAF</Text>
         <View style={styles.qtyRow}>
           <TouchableOpacity
             style={[styles.qtyBtn, item.quantity === 1 && styles.qtyBtnDanger]}
             onPress={() => item.quantity === 1 ? onDelete(item.id) : onDecrease(item.id)}
           >
-            <Text style={styles.qtyBtnText}>{item.quantity === 1 ? '🗑' : '−'}</Text>
+            {item.quantity === 1 ? <Ionicons name="trash-outline" size={16} color="#fff" /> : <Text style={styles.qtyBtnText}>−</Text>}
           </TouchableOpacity>
           <Text style={styles.qtyValue}>{item.quantity}</Text>
           <TouchableOpacity style={styles.qtyBtn} onPress={() => onIncrease(item.id)}>
@@ -51,7 +50,7 @@ function CartItem({ item, onIncrease, onDecrease, onDelete }) {
 }
 
 export default function CartScreen({ navigation }) {
-  const { items, subtotal, deliveryFee, discount, total, totalItems, addItem, removeItem, deleteItem, clearCart, applyCoupon, removeCoupon, coupon } = useCart();
+  const { items, subtotal, deliveryFee, discount, total, totalItems, addItem, removeItem, deleteItem, clearCart, applyCoupon, removeCoupon, coupon, restaurant: cartRestaurant } = useCart();
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
 
@@ -82,10 +81,10 @@ export default function CartScreen({ navigation }) {
   if (items.length === 0) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
-        <Text style={styles.emptyEmoji}>🛒</Text>
+        <Ionicons name="cart-outline" size={80} color="#ccc" style={{ marginBottom: 16 }} />
         <Text style={styles.emptyTitle}>Votre panier est vide</Text>
         <Text style={styles.emptySubtitle}>Ajoutez des plats depuis le menu</Text>
-        <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Main', { screen: 'Menu' })}>
+        <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Main', { screen: 'Accueil' })}>
           <Text style={styles.shopBtnText}>Voir le menu</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -96,7 +95,10 @@ export default function CartScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mon panier</Text>
+        <View>
+          <Text style={styles.headerTitle}>Mon panier</Text>
+          {cartRestaurant && <Text style={{ fontSize: 13, color: COLORS.gray, marginTop: 2 }}>{cartRestaurant.name}</Text>}
+        </View>
         <TouchableOpacity onPress={handleClearCart}>
           <Text style={styles.clearText}>Vider</Text>
         </TouchableOpacity>
@@ -120,7 +122,7 @@ export default function CartScreen({ navigation }) {
             <View style={styles.couponSection}>
               {coupon ? (
                 <View style={styles.couponApplied}>
-                  <Text style={styles.couponAppliedText}>🎉 Code «{coupon.code}» appliqué — -{discount.toLocaleString('fr-FR')} XAF</Text>
+                  <Text style={styles.couponAppliedText}><Ionicons name="pricetag" size={13} color="#16a34a" /> Code «{coupon.code}» appliqué — -{discount.toLocaleString('fr-FR')} XAF</Text>
                   <TouchableOpacity onPress={removeCoupon}>
                     <Text style={styles.couponRemove}>✕</Text>
                   </TouchableOpacity>
@@ -219,6 +221,7 @@ const styles = StyleSheet.create({
   itemPlaceholder: { fontSize: 40, width: 72, height: 72, textAlign: 'center', lineHeight: 72 },
   itemInfo:        { flex: 1 },
   itemName:        { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
+  itemOptions:     { fontSize: 12, color: COLORS.primary, marginBottom: 4, fontStyle: 'italic' },
   itemPrice:       { fontSize: 13, color: COLORS.gray, marginBottom: 8 },
   qtyRow:          { flexDirection: 'row', alignItems: 'center', gap: 10 },
   qtyBtn: {

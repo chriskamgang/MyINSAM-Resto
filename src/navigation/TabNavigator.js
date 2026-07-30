@@ -3,9 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
+import { useMarket } from '../context/MarketContext';
 import { useAuth } from '../context/AuthContext';
 
 import HomeScreen    from '../screens/menu/HomeScreen';
+import MarketHomeScreen from '../screens/market/MarketHomeScreen';
 import CartScreen    from '../screens/cart/CartScreen';
 import OrdersScreen  from '../screens/orders/OrdersScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
@@ -20,6 +22,7 @@ const COLORS = {
 
 const TAB_ICONS = {
   Accueil:   { active: 'home',      inactive: 'home-outline' },
+  'Marché':  { active: 'basket',    inactive: 'basket-outline' },
   Panier:    { active: 'cart',      inactive: 'cart-outline' },
   Commandes: { active: 'receipt',   inactive: 'receipt-outline' },
   Profil:    { active: 'person',    inactive: 'person-outline' },
@@ -30,6 +33,20 @@ function CartTabIcon({ focused, color }) {
   return (
     <View>
       <Ionicons name={focused ? 'cart' : 'cart-outline'} size={24} color={color} />
+      {totalItems > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function MarketTabIcon({ focused, color }) {
+  const { totalItems } = useMarket();
+  return (
+    <View>
+      <Ionicons name={focused ? 'basket' : 'basket-outline'} size={24} color={color} />
       {totalItems > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
@@ -73,6 +90,12 @@ function AuthGatedOrders(props) {
   return <OrdersScreen {...props} />;
 }
 
+function AuthGatedMarket(props) {
+  const { user } = useAuth();
+  if (!user) return <LoginPromptScreen {...props} icon="basket-outline" title="Mon Marché" message="Connectez-vous pour faire vos courses au marché." />;
+  return <MarketHomeScreen {...props} />;
+}
+
 function AuthGatedProfile(props) {
   const { user } = useAuth();
   if (!user) return <LoginPromptScreen {...props} icon="person-outline" title="Votre profil" message="Connectez-vous pour acceder a votre profil et vos parametres." />;
@@ -102,6 +125,7 @@ export default function TabNavigator() {
           fontWeight: '600',
         },
         tabBarIcon: ({ focused, color }) => {
+          if (route.name === 'Marché') return <MarketTabIcon focused={focused} color={color} />;
           if (route.name === 'Panier') return <CartTabIcon focused={focused} color={color} />;
           const iconName = focused ? TAB_ICONS[route.name].active : TAB_ICONS[route.name].inactive;
           return <Ionicons name={iconName} size={24} color={color} />;
@@ -109,6 +133,7 @@ export default function TabNavigator() {
       })}
     >
       <Tab.Screen name="Accueil"   component={HomeScreen} />
+      <Tab.Screen name="Marché"    component={AuthGatedMarket} />
       <Tab.Screen name="Panier"    component={AuthGatedCart} />
       <Tab.Screen name="Commandes" component={AuthGatedOrders} />
       <Tab.Screen name="Profil"    component={AuthGatedProfile} />
