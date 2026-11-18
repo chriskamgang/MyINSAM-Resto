@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, Alert, TextInput,
-} from 'react-native';
-import { useCart } from '../../context/CartContext';
-import { orderService } from '../../services/orderService';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useCart } from '../../context/CartContext';
+import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
+import { useAuth } from '../../context/AuthContext';
+import { orderService } from '../../services/orderService';
 import { profileService } from '../../services/profileService';
-
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
+import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { Screen, ScreenHeader, Button, Input, Card, Badge, Divider, MetaItem } from '../../components/ui';
+import { GFS_COLOR } from './GfsPaymentScreen';
 
 // Calcule le temps de livraison via OSRM (routing OpenStreetMap)
 async function getDeliveryMinutes(clientLat, clientLon, restLat = 5.4720, restLon = 10.4180) {
@@ -26,38 +27,115 @@ async function getDeliveryMinutes(clientLat, clientLon, restLat = 5.4720, restLo
   return null;
 }
 
+// Couleurs de marque des opérateurs (accents uniquement)
+const MTN_YELLOW = '#FFCC00';
+const ORANGE_BRAND = '#FF7900';
+
 const PAYMENT_METHODS = [
-  { key: 'cash',        label: 'Espèces',          iconName: 'cash-outline', desc: 'Payer à la livraison' },
-  { key: 'mtn_momo',   label: 'MTN Mobile Money',  iconName: 'phone-portrait-outline', desc: 'Paiement mobile MTN' },
-  { key: 'orange_money',label: 'Orange Money',      iconName: 'phone-portrait-outline', desc: 'Paiement mobile Orange' },
+  { key: 'cash',         label: 'Espèces',          iconName: 'cash-outline', desc: 'Payer à la livraison', accent: COLORS.success, soft: COLORS.successSoft, short: null },
+  { key: 'mtn_momo',     label: 'MTN Mobile Money', iconName: 'phone-portrait-outline', desc: 'Paiement mobile MTN', accent: MTN_YELLOW, soft: '#FFF8D6', short: 'MTN' },
+  { key: 'orange_money', label: 'Orange Money',     iconName: 'phone-portrait-outline', desc: 'Paiement mobile Orange', accent: ORANGE_BRAND, soft: '#FFF0E3', short: 'OM' },
+  { key: 'gfs',          label: 'Compte GFS',       iconName: 'wallet-outline', desc: 'N° client GFS + code PIN', accent: GFS_COLOR, soft: '#E6F0F7', short: 'GFS', freeDelivery: true },
 ];
 
+// Titre d'étape numérotée
+function StepTitle({ index, title, icon }) {
+  return (
+    <View style={styles.stepTitle}>
+      <View style={styles.stepNum}><Text style={styles.stepNumText}>{index}</Text></View>
+      <Text style={[TYPE.h3, { flex: 1 }]}>{title}</Text>
+      {icon ? <Ionicons name={icon} size={18} color={COLORS.primary} /> : null}
+    </View>
+  );
+}
+
+function Radio({ selected, color = COLORS.primary }) {
+  return (
+    <View style={[styles.radioOuter, selected && { borderColor: color }]}>
+      {selected ? <View style={[styles.radioInner, { backgroundColor: color }]} /> : null}
+    </View>
+  );
+}
+
+function AddressOption({ title, address, phone, isDefault, selected, onPress, onRemove, icon = 'location-outline' }) {
+  return (
+    <TouchableOpacity
+      style={[styles.option, selected && styles.optionSelected]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={[styles.optionIcon, selected && { backgroundColor: COLORS.primary }]}>
+        <Ionicons name={icon} size={18} color={selected ? COLORS.white : COLORS.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={styles.optionTitle} numberOfLines={1}>{title}</Text>
+          {isDefault ? <Badge label="Par défaut" /> : null}
+        </View>
+        <Text style={TYPE.caption} numberOfLines={2}>{address}</Text>
+        {phone ? <MetaItem icon="call-outline" label={phone} color={COLORS.primary} size={12} /> : null}
+      </View>
+      {onRemove ? (
+        <TouchableOpacity onPress={onRemove} hitSlop={8}>
+          <Ionicons name="close-circle" size={22} color={COLORS.textLight} />
+        </TouchableOpacity>
+      ) : <Radio selected={selected} />}
+    </TouchableOpacity>
+  );
+}
+
 export default function CheckoutScreen({ navigation }) {
-  const { items, subtotal, deliveryFee, discount, total, coupon, clearCart, restaurant: cartRestaurant } = useCart();
+  const { items, subtotal, deliveryFee: cartDeliveryFee, discount, coupon, clearCart, restaurant: cartRestaurant } = useCart();
+  const { location, setLocation, selectSavedAddress } = useDeliveryLocation();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
+  const [tempAddress, setTempAddress] = useState(null); // adresse non enregistrée (id 'temp')
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  // Paiement GFS → livraison offerte (le serveur applique la même règle)
+  const deliveryFee = paymentMethod === 'gfs' ? 0 : cartDeliveryFee;
+  const total = Math.max(0, subtotal + deliveryFee - discount);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [estimate, setEstimate] = useState(null); // minutes OSRM pour l'adresse choisie
+  const [estimating, setEstimating] = useState(false);
 
-  // Quick address input (without saving)
+  // Saisie rapide d'adresse (sans l'enregistrer)
   const [showQuickAddress, setShowQuickAddress] = useState(false);
   const [quickAddressQuery, setQuickAddressQuery] = useState('');
   const [searchingAddress, setSearchingAddress] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [quickAddressPhone, setQuickAddressPhone] = useState('');
 
+  const searchTimer = useRef(null);
+  const prefilled = useRef(false);   // pré-remplissage depuis « Livrer à … » fait une seule fois
+  const userPicked = useRef(false);  // l'utilisateur a choisi lui-même une adresse
+
+  // Invité : la commande nécessite un compte → redirection vers la connexion
   useEffect(() => {
+    if (!user) {
+      navigation.replace('Auth', { screen: 'Login' });
+      return undefined;
+    }
     loadAddresses();
-  }, []);
+    return () => clearTimeout(searchTimer.current);
+  }, [user]);
 
   const loadAddresses = async () => {
     try {
       const data = await profileService.getAddresses();
-      setAddresses(data);
-      const def = data.find(a => a.is_default) || data[0];
-      if (def) setSelectedAddress(def);
+      const list = Array.isArray(data) ? data : [];
+      setAddresses(list);
+      // Garde la sélection de l'utilisateur si elle existe encore (ex. retour d'AddAddress)
+      setSelectedAddress((prev) => {
+        if (prev?.id === 'temp') return prev;
+        if (prev && list.some((a) => a.id === prev.id)) return list.find((a) => a.id === prev.id);
+        if (userPicked.current && prev) return prev;
+        return list.find((a) => a.is_default) || list[0] || prev || null;
+      });
     } catch (e) {
       console.error('Erreur adresses:', e);
     } finally {
@@ -65,7 +143,47 @@ export default function CheckoutScreen({ navigation }) {
     }
   };
 
-  // Search address with Nominatim
+  // Pré-remplit l'adresse depuis la position de livraison choisie à l'accueil
+  useEffect(() => {
+    if (loadingAddresses || prefilled.current || userPicked.current || !location) return;
+    prefilled.current = true;
+
+    if (location.addressId) {
+      const match = addresses.find((a) => String(a.id) === String(location.addressId));
+      if (match) { setSelectedAddress(match); return; }
+    }
+    if (location.address || (location.latitude && location.longitude)) {
+      const temp = {
+        id: 'temp',
+        address: location.address || location.label,
+        latitude: location.latitude ?? null,
+        longitude: location.longitude ?? null,
+        phone: null,
+        label: location.source === 'gps' ? 'Ma position actuelle' : (location.label || 'Adresse de livraison'),
+        is_default: false,
+      };
+      setTempAddress(temp);
+      setSelectedAddress(temp);
+    }
+  }, [loadingAddresses, location, addresses]);
+
+  // Estimation OSRM dès qu'une adresse avec coordonnées est choisie
+  useEffect(() => {
+    let cancelled = false;
+    setEstimate(null);
+    if (!selectedAddress?.latitude || !selectedAddress?.longitude) return undefined;
+    setEstimating(true);
+    getDeliveryMinutes(
+      parseFloat(selectedAddress.latitude),
+      parseFloat(selectedAddress.longitude),
+      cartRestaurant?.latitude ? parseFloat(cartRestaurant.latitude) : undefined,
+      cartRestaurant?.longitude ? parseFloat(cartRestaurant.longitude) : undefined
+    ).then((m) => { if (!cancelled) setEstimate(m); })
+      .finally(() => { if (!cancelled) setEstimating(false); });
+    return () => { cancelled = true; };
+  }, [selectedAddress?.id, selectedAddress?.latitude, selectedAddress?.longitude]);
+
+  // Recherche d'adresse avec Nominatim
   const searchAddress = async (query) => {
     if (!query.trim()) {
       setAddressSuggestions([]);
@@ -78,7 +196,7 @@ export default function CheckoutScreen({ navigation }) {
         { headers: { 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
       );
       const data = await res.json();
-      setAddressSuggestions(data);
+      setAddressSuggestions(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Erreur recherche adresse:', e);
       setAddressSuggestions([]);
@@ -87,8 +205,23 @@ export default function CheckoutScreen({ navigation }) {
     }
   };
 
+  // Anti-rebond : Nominatim limite à ~1 requête / seconde
+  const onQuickQueryChange = (text) => {
+    setQuickAddressQuery(text);
+    clearTimeout(searchTimer.current);
+    if (!text.trim()) { setAddressSuggestions([]); return; }
+    searchTimer.current = setTimeout(() => searchAddress(text), 500);
+  };
+
+  const closeQuickAddress = () => {
+    clearTimeout(searchTimer.current);
+    setShowQuickAddress(false);
+    setQuickAddressQuery('');
+    setAddressSuggestions([]);
+  };
+
   const selectQuickAddress = (suggestion) => {
-    const tempAddress = {
+    const temp = {
       id: 'temp',
       address: suggestion.display_name,
       latitude: parseFloat(suggestion.lat),
@@ -97,10 +230,32 @@ export default function CheckoutScreen({ navigation }) {
       label: 'Adresse temporaire',
       is_default: false,
     };
-    setSelectedAddress(tempAddress);
-    setQuickAddressQuery('');
-    setAddressSuggestions([]);
-    setShowQuickAddress(false);
+    userPicked.current = true;
+    setTempAddress(temp);
+    setSelectedAddress(temp);
+    closeQuickAddress();
+    // Synchronise « Livrer à … » de l'accueil
+    setLocation?.({
+      label: suggestion.display_name.split(',')[0],
+      address: suggestion.display_name,
+      latitude: temp.latitude,
+      longitude: temp.longitude,
+      addressId: null,
+      source: 'address',
+    });
+  };
+
+  const pickSavedAddress = (addr) => {
+    userPicked.current = true;
+    setSelectedAddress(addr);
+    selectSavedAddress?.(addr);
+  };
+
+  const removeTempAddress = () => {
+    setTempAddress(null);
+    if (selectedAddress?.id === 'temp') {
+      setSelectedAddress(addresses.find((a) => a.is_default) || addresses[0] || null);
+    }
   };
 
   const handleOrder = async () => {
@@ -111,7 +266,7 @@ export default function CheckoutScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // If temporary address, create it first
+      // Adresse temporaire : on la crée d'abord
       let addressId = selectedAddress.id;
       if (selectedAddress.id === 'temp') {
         const newAddr = await profileService.addAddress({
@@ -122,7 +277,9 @@ export default function CheckoutScreen({ navigation }) {
           phone: selectedAddress.phone,
           is_default: false,
         });
-        addressId = newAddr.id;
+        // Le serveur répond { message, address: { id, ... } }
+        addressId = newAddr?.address?.id ?? newAddr?.id;
+        if (!addressId) throw new Error("L'adresse n'a pas pu être enregistrée. Réessayez.");
       }
 
       const orderData = {
@@ -134,16 +291,16 @@ export default function CheckoutScreen({ navigation }) {
         items: items.map(item => ({
           menu_item_id: item.id,
           quantity: item.quantity,
-          selected_options: item.selected_options || null,
+          options: item.selected_options || null, // le serveur lit « options »
         })),
       };
 
       const result = await orderService.createOrder(orderData);
       const order = result.order || result; // Le backend renvoie { message, order }
 
-      // Calculer le temps de livraison via OSRM si l'adresse a des coordonnées
-      let deliveryMinutes = null;
-      if (selectedAddress?.latitude && selectedAddress?.longitude) {
+      // Temps de livraison via OSRM (réutilise l'estimation déjà calculée)
+      let deliveryMinutes = estimate;
+      if (deliveryMinutes == null && selectedAddress?.latitude && selectedAddress?.longitude) {
         deliveryMinutes = await getDeliveryMinutes(
           parseFloat(selectedAddress.latitude),
           parseFloat(selectedAddress.longitude),
@@ -152,340 +309,363 @@ export default function CheckoutScreen({ navigation }) {
         );
       }
 
-      // Si paiement mobile money → rediriger vers l'écran de paiement
+      // Paiement mobile money → écran de paiement
       // NE PAS vider le panier ici, on le videra après confirmation du paiement
       if (paymentMethod === 'mtn_momo' || paymentMethod === 'orange_money') {
         navigation.replace('MobilePayment', { order, paymentMethod, deliveryMinutes });
         return;
       }
 
-      // Sinon (espèces) → aller directement à la confirmation et vider le panier
+      // Compte GFS → page de paiement GFS (panier vidé après confirmation)
+      if (paymentMethod === 'gfs') {
+        navigation.replace('GfsPayment', { order, deliveryMinutes });
+        return;
+      }
+
+      // Sinon (espèces) → confirmation directe et panier vidé
       clearCart();
       navigation.replace('OrderConfirmation', { order, deliveryMinutes });
     } catch (e) {
-      const msg = e.response?.data?.message || 'Une erreur est survenue lors de la commande.';
+      const msg = e.response?.data?.message
+        || (!e.isAxiosError && e.message)
+        || 'Une erreur est survenue lors de la commande.';
       Alert.alert('Erreur', msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const isMobile = paymentMethod === 'mtn_momo' || paymentMethod === 'orange_money';
+  const isOnline = isMobile || paymentMethod === 'gfs';
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Finaliser la commande</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <Screen>
+      <ScreenHeader
+        title="Finaliser la commande"
+        subtitle={cartRestaurant?.name}
+        onBack={() => navigation.goBack()}
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
-        {/* Adresse de livraison */}
-        <Text style={styles.sectionTitle}><Ionicons name="location-outline" size={16} color="#1a1a1a" /> Adresse de livraison</Text>
-        {loadingAddresses ? (
-          <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 16 }} />
-        ) : addresses.length === 0 ? (
-          <View style={styles.noAddressCard}>
-            <Text style={styles.noAddressText}>Aucune adresse enregistrée</Text>
-            <TouchableOpacity
-              style={styles.addAddressBtn}
-              onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}
-            >
-              <Text style={styles.addAddressBtnText}>+ Ajouter une adresse</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* Show selected address if temp */}
-            {selectedAddress?.id === 'temp' && (
-              <View style={[styles.addressCard, styles.addressCardSelected]}>
-                <View style={styles.addressRadio}>
-                  <View style={[styles.radioOuter, styles.radioOuterSelected]}>
-                    <View style={styles.radioInner} />
-                  </View>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.addressLabel}>Adresse rapide</Text>
-                  <Text style={styles.addressValue}>{selectedAddress.address}</Text>
-                  {selectedAddress.phone && <Text style={styles.addressPhone}><Ionicons name="call-outline" size={12} color="#888" /> {selectedAddress.phone}</Text>}
-                </View>
-                <TouchableOpacity onPress={() => setSelectedAddress(null)}>
-                  <Text style={{ color: COLORS.primary, fontSize: 20 }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{ paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 130 + insets.bottom }}
+      >
+        {/* 1. Adresse de livraison */}
+        <Card style={styles.section}>
+          <StepTitle index={1} title="Adresse de livraison" icon="location-outline" />
 
-            {/* Show saved addresses */}
-            {selectedAddress?.id !== 'temp' && addresses.map(addr => (
+          {loadingAddresses ? (
+            <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 16 }} />
+          ) : (
+            <>
+              {tempAddress ? (
+                <AddressOption
+                  title={tempAddress.label === 'Adresse temporaire' ? 'Adresse rapide' : tempAddress.label}
+                  address={tempAddress.address}
+                  phone={tempAddress.phone}
+                  icon={tempAddress.label === 'Ma position actuelle' ? 'navigate-outline' : 'location-outline'}
+                  selected={selectedAddress?.id === 'temp'}
+                  onPress={() => { userPicked.current = true; setSelectedAddress(tempAddress); }}
+                  onRemove={removeTempAddress}
+                />
+              ) : null}
+
+              {addresses.map((addr) => (
+                <AddressOption
+                  key={addr.id}
+                  title={addr.label || 'Adresse'}
+                  address={addr.address}
+                  phone={addr.phone}
+                  isDefault={addr.is_default}
+                  icon={/maison|home/i.test(addr.label || '') ? 'home-outline' : /bureau|travail|work/i.test(addr.label || '') ? 'briefcase-outline' : 'location-outline'}
+                  selected={selectedAddress?.id === addr.id}
+                  onPress={() => pickSavedAddress(addr)}
+                />
+              ))}
+
+              {!tempAddress && addresses.length === 0 && !showQuickAddress ? (
+                <View style={styles.noAddress}>
+                  <Ionicons name="map-outline" size={26} color={COLORS.primary} />
+                  <Text style={[TYPE.bodyMuted, { textAlign: 'center' }]}>Aucune adresse enregistrée</Text>
+                </View>
+              ) : null}
+
+              {showQuickAddress ? (
+                <View style={styles.quickBox}>
+                  <Input
+                    icon="search-outline"
+                    label="Saisir votre adresse"
+                    placeholder="Ex : Tamdja, Bafoussam"
+                    value={quickAddressQuery}
+                    onChangeText={onQuickQueryChange}
+                    autoFocus
+                    right={searchingAddress ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
+                  />
+                  {addressSuggestions.length > 0 ? (
+                    <View style={styles.suggestions}>
+                      {addressSuggestions.map((item, i) => (
+                        <TouchableOpacity
+                          key={item.place_id}
+                          style={[styles.suggestion, i > 0 && styles.suggestionBorder]}
+                          onPress={() => selectQuickAddress(item)}
+                        >
+                          <Ionicons name="location-outline" size={16} color={COLORS.primary} />
+                          <Text style={styles.suggestionText} numberOfLines={2}>{item.display_name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Input
+                    icon="call-outline"
+                    label="Téléphone (optionnel)"
+                    placeholder="6XX XX XX XX"
+                    value={quickAddressPhone}
+                    onChangeText={setQuickAddressPhone}
+                    keyboardType="phone-pad"
+                    style={{ marginTop: 10 }}
+                  />
+                  <TouchableOpacity onPress={closeQuickAddress} style={styles.cancelLink}>
+                    <Text style={styles.cancelLinkText}>Annuler</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.addrActions}>
+                  <TouchableOpacity style={styles.addrAction} onPress={() => setShowQuickAddress(true)}>
+                    <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.addrActionText}>Saisir une adresse</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.addrAction}
+                    onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}
+                  >
+                    <Ionicons name="add" size={18} color={COLORS.primary} />
+                    <Text style={styles.addrActionText}>Nouvelle adresse</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {selectedAddress?.latitude && selectedAddress?.longitude ? (
+                <View style={styles.eta}>
+                  <Ionicons name="bicycle-outline" size={18} color={COLORS.primary} />
+                  {estimating ? (
+                    <Text style={styles.etaText}>Calcul du temps de livraison…</Text>
+                  ) : estimate != null ? (
+                    <Text style={styles.etaText}>
+                      Livraison estimée : <Text style={styles.etaStrong}>~{15 + estimate} min</Text>
+                    </Text>
+                  ) : (
+                    <Text style={styles.etaText}>Livraison estimée : <Text style={styles.etaStrong}>30–45 min</Text></Text>
+                  )}
+                </View>
+              ) : null}
+            </>
+          )}
+        </Card>
+
+        {/* 2. Mode de paiement */}
+        <Card style={styles.section}>
+          <StepTitle index={2} title="Mode de paiement" icon="card-outline" />
+          {PAYMENT_METHODS.map((pm) => {
+            const selected = paymentMethod === pm.key;
+            return (
               <TouchableOpacity
-                key={addr.id}
-                style={[styles.addressCard, selectedAddress?.id === addr.id && styles.addressCardSelected]}
-                onPress={() => setSelectedAddress(addr)}
+                key={pm.key}
+                style={[styles.option, selected && { borderColor: pm.accent, backgroundColor: pm.soft }]}
+                onPress={() => setPaymentMethod(pm.key)}
+                activeOpacity={0.85}
               >
-                <View style={styles.addressRadio}>
-                  <View style={[styles.radioOuter, selectedAddress?.id === addr.id && styles.radioOuterSelected]}>
-                    {selectedAddress?.id === addr.id && <View style={styles.radioInner} />}
-                  </View>
+                <View style={[styles.payLogo, { backgroundColor: pm.short ? pm.accent : pm.soft }]}>
+                  {pm.short ? (
+                    <Text style={[styles.payLogoText, { color: pm.key === 'mtn_momo' ? COLORS.text : COLORS.white }]}>{pm.short}</Text>
+                  ) : (
+                    <Ionicons name={pm.iconName} size={22} color={pm.accent} />
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.addressLabel}>{addr.label || 'Adresse'}</Text>
-                  <Text style={styles.addressValue}>{addr.address}</Text>
-                  {addr.phone && <Text style={styles.addressPhone}><Ionicons name="call-outline" size={12} color="#888" /> {addr.phone}</Text>}
-                  {addr.is_default && <Text style={styles.defaultBadge}>Par défaut</Text>}
-                </View>
-              </TouchableOpacity>
-            ))}
-
-            {/* Quick address input */}
-            {!showQuickAddress ? (
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                <TouchableOpacity
-                  style={[styles.addMoreAddress, { flex: 1 }]}
-                  onPress={() => setShowQuickAddress(true)}
-                >
-                  <Text style={styles.addMoreAddressText}><Ionicons name="create-outline" size={14} color="#FF6B35" /> Saisir une adresse</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.addMoreAddress, { flex: 1 }]}
-                  onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}
-                >
-                  <Text style={styles.addMoreAddressText}>+ Nouvelle adresse</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.quickAddressBox}>
-                <Text style={styles.quickAddressTitle}>Saisir votre adresse</Text>
-                <TextInput
-                  style={styles.quickAddressInput}
-                  placeholder="Ex: Tamdja, Bafoussam"
-                  value={quickAddressQuery}
-                  onChangeText={(text) => {
-                    setQuickAddressQuery(text);
-                    searchAddress(text);
-                  }}
-                  placeholderTextColor="#aaa"
-                />
-                {searchingAddress && (
-                  <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 8 }} />
-                )}
-                {addressSuggestions.length > 0 && (
-                  <View style={styles.suggestionsBox}>
-                    {addressSuggestions.map((item) => (
-                      <TouchableOpacity
-                        key={item.place_id}
-                        style={styles.suggestionItem}
-                        onPress={() => selectQuickAddress(item)}
-                      >
-                        <Text style={styles.suggestionText} numberOfLines={2}>
-                          {item.display_name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                  <View style={styles.optionTitleRow}>
+                    <Text style={styles.optionTitle}>{pm.label}</Text>
+                    {pm.freeDelivery && cartDeliveryFee > 0 ? (
+                      <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>Livraison offerte</Text></View>
+                    ) : null}
                   </View>
-                )}
-                <TextInput
-                  style={[styles.quickAddressInput, { marginTop: 8 }]}
-                  placeholder="Numéro de téléphone (optionnel)"
-                  value={quickAddressPhone}
-                  onChangeText={setQuickAddressPhone}
-                  placeholderTextColor="#aaa"
-                  keyboardType="phone-pad"
-                />
-                <TouchableOpacity
-                  style={{ marginTop: 8 }}
-                  onPress={() => {
-                    setShowQuickAddress(false);
-                    setQuickAddressQuery('');
-                    setAddressSuggestions([]);
-                  }}
-                >
-                  <Text style={{ color: COLORS.gray, fontSize: 13 }}>Annuler</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </>
-        )}
-
-        {/* Mode de paiement */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}><Ionicons name="card-outline" size={16} color="#1a1a1a" /> Mode de paiement</Text>
-        {PAYMENT_METHODS.map(pm => (
-          <TouchableOpacity
-            key={pm.key}
-            style={[styles.payCard, paymentMethod === pm.key && styles.payCardSelected]}
-            onPress={() => setPaymentMethod(pm.key)}
-          >
-            <Ionicons name={pm.iconName} size={24} color={paymentMethod === pm.key ? '#FF6B35' : '#888'} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.payLabel}>{pm.label}</Text>
-              <Text style={styles.payDesc}>{pm.desc}</Text>
+                  <Text style={TYPE.caption}>{pm.desc}</Text>
+                </View>
+                <Radio selected={selected} color={pm.key === 'mtn_momo' ? '#E0B000' : pm.accent} />
+              </TouchableOpacity>
+            );
+          })}
+          {isMobile ? (
+            <View style={styles.infoNote}>
+              <Ionicons name="information-circle-outline" size={16} color={COLORS.info} />
+              <Text style={styles.infoNoteText}>
+                Vous confirmerez le paiement sur votre téléphone à l'étape suivante.
+              </Text>
             </View>
-            <View style={[styles.radioOuter, paymentMethod === pm.key && styles.radioOuterSelected]}>
-              {paymentMethod === pm.key && <View style={styles.radioInner} />}
+          ) : null}
+          {paymentMethod === 'gfs' ? (
+            <View style={styles.infoNote}>
+              <Ionicons name="information-circle-outline" size={16} color={COLORS.info} />
+              <Text style={styles.infoNoteText}>
+                Vous validerez avec votre numéro client GFS et votre code PIN à l'étape suivante.
+              </Text>
             </View>
-          </TouchableOpacity>
-        ))}
+          ) : null}
+        </Card>
 
-        {/* Note */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}><Ionicons name="document-text-outline" size={16} color="#1a1a1a" /> Note (optionnel)</Text>
-        <TextInput
-          style={styles.noteInput}
-          placeholder="Instructions particulières pour la préparation ou la livraison..."
-          value={note}
-          onChangeText={setNote}
-          multiline
-          numberOfLines={3}
-          placeholderTextColor="#aaa"
-          textAlignVertical="top"
-        />
+        {/* 3. Note pour le livreur */}
+        <Card style={styles.section}>
+          <StepTitle index={3} title="Note pour le livreur" icon="chatbubble-ellipses-outline" />
+          <Input
+            icon="document-text-outline"
+            placeholder="Instructions particulières pour la préparation ou la livraison… (optionnel)"
+            value={note}
+            onChangeText={setNote}
+            multiline
+            numberOfLines={3}
+          />
+        </Card>
 
-        {/* Récap commande */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}><Ionicons name="receipt-outline" size={16} color="#1a1a1a" /> Récapitulatif</Text>
-        <View style={styles.summaryCard}>
-          {items.map(item => (
-            <View key={item.id} style={styles.summaryRow}>
-              <Text style={styles.summaryQty}>{item.quantity}×</Text>
-              <Text style={styles.summaryName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.summaryPrice}>
-                {(Number(item.effective_price || item.price) * item.quantity).toLocaleString('fr-FR')} XAF
+        {/* 4. Récapitulatif */}
+        <Card style={styles.section}>
+          <StepTitle index={4} title="Récapitulatif" icon="receipt-outline" />
+          {items.map((item) => (
+            <View key={item.id} style={styles.sumItem}>
+              <View style={styles.qtyPill}><Text style={styles.qtyPillText}>{item.quantity}×</Text></View>
+              <Text style={styles.sumName} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.sumValue}>
+                {formatPrice(Number(item.effective_price || item.price) * item.quantity)}
               </Text>
             </View>
           ))}
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryName, { color: COLORS.gray }]}>Livraison</Text>
-            <Text style={styles.summaryPrice}>
-              {deliveryFee === 0 ? <Text style={{ color: '#22c55e' }}>Gratuite</Text> : `${deliveryFee.toLocaleString('fr-FR')} XAF`}
+          <Divider style={{ marginVertical: 10 }} />
+          <View style={styles.sumRow}>
+            <Text style={TYPE.bodyMuted}>Sous-total</Text>
+            <Text style={styles.sumValue}>{formatPrice(subtotal)}</Text>
+          </View>
+          <View style={styles.sumRow}>
+            <Text style={TYPE.bodyMuted}>Livraison</Text>
+            <Text style={[styles.sumValue, deliveryFee === 0 && { color: COLORS.success }]}>
+              {deliveryFee === 0 ? (paymentMethod === 'gfs' && cartDeliveryFee > 0 ? 'Offerte (GFS)' : 'Gratuite') : formatPrice(deliveryFee)}
             </Text>
           </View>
-          {discount > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryName, { color: '#22c55e' }]}>Réduction</Text>
-              <Text style={[styles.summaryPrice, { color: '#22c55e' }]}>-{discount.toLocaleString('fr-FR')} XAF</Text>
+          {discount > 0 ? (
+            <View style={styles.sumRow}>
+              <Text style={[TYPE.bodyMuted, { color: COLORS.success }]}>
+                Réduction{coupon?.code ? ` (${coupon.code})` : ''}
+              </Text>
+              <Text style={[styles.sumValue, { color: COLORS.success }]}>-{formatPrice(discount)}</Text>
             </View>
-          )}
-          <View style={[styles.summaryRow, { marginTop: 8 }]}>
-            <Text style={styles.summaryTotal}>TOTAL</Text>
-            <Text style={styles.summaryTotalValue}>{total.toLocaleString('fr-FR')} XAF</Text>
+          ) : null}
+          <Divider style={{ marginVertical: 10 }} />
+          <View style={styles.sumRow}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>{formatPrice(total)}</Text>
           </View>
-        </View>
+        </Card>
       </ScrollView>
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.orderBtn, loading && { opacity: 0.7 }]}
+      {/* Barre de paiement fixe */}
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
+        <View style={styles.barTotal}>
+          <Text style={TYPE.caption}>Total à payer</Text>
+          <Text style={styles.barTotalValue}>{formatPrice(total)}</Text>
+        </View>
+        <Button
+          title={isOnline ? 'Payer maintenant' : 'Confirmer'}
+          iconRight="arrow-forward"
           onPress={handleOrder}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.orderBtnText}>Confirmer la commande • {total.toLocaleString('fr-FR')} XAF</Text>
-          }
-        </TouchableOpacity>
+          loading={loading}
+          style={{ flex: 1 }}
+        />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  section: { marginBottom: 16 },
+  stepTitle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  stepNum: {
+    width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center',
   },
-  backBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backText:    { fontSize: 24, color: COLORS.text },
-  headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  stepNumText: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.white },
 
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
-
-  noAddressCard: {
-    backgroundColor: COLORS.card, borderRadius: 16, padding: 20,
-    alignItems: 'center', marginBottom: 8,
+  option: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: RADIUS.lg, padding: 12, marginBottom: 10,
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surface,
   },
-  noAddressText:    { color: COLORS.gray, marginBottom: 12 },
-  addAddressBtn:    { backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
-  addAddressBtnText:{ color: '#fff', fontWeight: '600' },
-
-  addressCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card,
-    borderRadius: 14, padding: 14, marginBottom: 8,
-    borderWidth: 1.5, borderColor: 'transparent',
+  optionSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primarySoft },
+  optionIcon: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  addressCardSelected: { borderColor: COLORS.primary },
-  addressRadio:  { marginRight: 12 },
+  optionTitle: { fontFamily: FONTS.semibold, fontSize: 14, color: COLORS.text, flexShrink: 1 },
+  optionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  freeBadge: { backgroundColor: COLORS.successSoft, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  freeBadgeText: { fontFamily: FONTS.semibold, fontSize: 10, color: COLORS.success },
+
   radioOuter: {
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2, borderColor: '#ccc', justifyContent: 'center', alignItems: 'center',
+    width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.textLight,
+    alignItems: 'center', justifyContent: 'center',
   },
-  radioOuterSelected: { borderColor: COLORS.primary },
-  radioInner:  { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
-  addressLabel:{ fontSize: 13, fontWeight: '700', color: COLORS.text },
-  addressValue:{ fontSize: 13, color: COLORS.gray, marginTop: 2 },
-  addressPhone:{ fontSize: 12, color: COLORS.primary, fontWeight: '600', marginTop: 2 },
-  defaultBadge:{ fontSize: 11, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
-  addMoreAddress:{ marginBottom: 4 },
-  addMoreAddressText:{ color: COLORS.primary, fontWeight: '600', fontSize: 14 },
+  radioInner: { width: 11, height: 11, borderRadius: 6 },
 
-  payCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card,
-    borderRadius: 14, padding: 14, marginBottom: 8,
-    borderWidth: 1.5, borderColor: 'transparent',
+  noAddress: { alignItems: 'center', gap: 6, paddingVertical: 12 },
+  addrActions: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  addrAction: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    height: 44, borderRadius: RADIUS.pill, backgroundColor: COLORS.primarySoft,
   },
-  payCardSelected: { borderColor: COLORS.primary },
-  payIcon:  { fontSize: 24, marginRight: 12 },
-  payLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  payDesc:  { fontSize: 12, color: COLORS.gray, marginTop: 2 },
+  addrActionText: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.primary },
 
-  noteInput: {
-    backgroundColor: COLORS.card, borderRadius: 14, padding: 14,
-    fontSize: 14, color: COLORS.text, borderWidth: 1.5, borderColor: '#e0e0e0',
-    minHeight: 90, marginBottom: 8,
+  quickBox: { marginTop: 2 },
+  suggestions: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.md, marginTop: 8,
+    borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', ...SHADOWS.sm,
   },
+  suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  suggestionBorder: { borderTopWidth: 1, borderTopColor: COLORS.divider },
+  suggestionText: { ...TYPE.caption, color: COLORS.text, flex: 1 },
+  cancelLink: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 },
+  cancelLinkText: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.textMuted },
 
-  summaryCard: {
-    backgroundColor: COLORS.card, borderRadius: 16, padding: 16,
+  eta: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
+    backgroundColor: COLORS.surfaceAlt, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 10,
   },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  summaryQty:  { fontSize: 13, color: COLORS.primary, fontWeight: '700', width: 28 },
-  summaryName: { flex: 1, fontSize: 13, color: COLORS.text },
-  summaryPrice:{ fontSize: 13, color: COLORS.text, fontWeight: '600' },
-  summaryDivider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 8 },
-  summaryTotal:{ flex: 1, fontSize: 15, fontWeight: 'bold', color: COLORS.text },
-  summaryTotalValue:{ fontSize: 16, fontWeight: '800', color: COLORS.primary },
+  etaText: { ...TYPE.caption, color: COLORS.text, flex: 1 },
+  etaStrong: { fontFamily: FONTS.semibold, color: COLORS.primary },
 
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 16, paddingBottom: 32, backgroundColor: COLORS.card,
-    borderTopWidth: 1, borderTopColor: '#f0f0f0',
+  payLogo: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  payLogoText: { fontFamily: FONTS.extrabold, fontSize: 13 },
+  infoNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.infoSoft, borderRadius: RADIUS.md, padding: 10,
   },
-  orderBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
-  },
-  orderBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  infoNoteText: { ...TYPE.caption, color: COLORS.info, flex: 1 },
 
-  // Quick address input
-  quickAddressBox: {
-    backgroundColor: COLORS.card, borderRadius: 14, padding: 14, marginTop: 8,
-    borderWidth: 1.5, borderColor: COLORS.primary,
+  sumItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  qtyPill: {
+    minWidth: 32, paddingHorizontal: 6, height: 24, borderRadius: 8, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  quickAddressTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
-  quickAddressInput: {
-    backgroundColor: '#f9f9f9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: '#e0e0e0',
+  qtyPillText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.primary },
+  sumName: { ...TYPE.body, flex: 1 },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
+  sumValue: { fontFamily: FONTS.semibold, fontSize: 14, color: COLORS.text },
+  totalLabel: { fontFamily: FONTS.semibold, fontSize: 16, color: COLORS.text },
+  totalValue: { fontFamily: FONTS.bold, fontSize: 20, color: COLORS.primary },
+
+  bar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: COLORS.surface, paddingHorizontal: SCREEN_PADDING, paddingTop: 14,
+    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, ...SHADOWS.lg,
   },
-  suggestionsBox: {
-    backgroundColor: '#fff', borderRadius: 10, marginTop: 8,
-    borderWidth: 1, borderColor: '#e0e0e0', overflow: 'hidden',
-  },
-  suggestionItem: {
-    padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  suggestionText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
+  barTotal: { minWidth: 100 },
+  barTotalValue: { fontFamily: FONTS.bold, fontSize: 18, color: COLORS.text },
 });

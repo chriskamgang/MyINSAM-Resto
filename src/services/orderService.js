@@ -35,7 +35,7 @@ export const orderService = {
     const response = await api.post(`/orders/${id}/rate`, {
       restaurant_rating: restaurantRating,
       driver_rating: driverRating,
-      comment,
+      restaurant_comment: comment || null, // le backend attend restaurant_comment
     });
     return response.data;
   },

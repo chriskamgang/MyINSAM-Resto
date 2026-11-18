@@ -1,6 +1,9 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { COLORS, FONTS } from '../theme';
+import EstuaireTabBar from './EstuaireTabBar';
+import { Screen, EmptyState } from '../components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
 import { useMarket } from '../context/MarketContext';
@@ -14,12 +17,6 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
-const COLORS = {
-  primary:  '#FF6B35',
-  inactive: '#999',
-  bg:       '#fff',
-};
-
 const TAB_ICONS = {
   Accueil:   { active: 'home',      inactive: 'home-outline' },
   'Marché':  { active: 'basket',    inactive: 'basket-outline' },
@@ -28,60 +25,30 @@ const TAB_ICONS = {
   Profil:    { active: 'person',    inactive: 'person-outline' },
 };
 
-function CartTabIcon({ focused, color }) {
-  const { totalItems } = useCart();
-  return (
-    <View>
-      <Ionicons name={focused ? 'cart' : 'cart-outline'} size={24} color={color} />
-      {totalItems > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-function MarketTabIcon({ focused, color }) {
-  const { totalItems } = useMarket();
-  return (
-    <View>
-      <Ionicons name={focused ? 'basket' : 'basket-outline'} size={24} color={color} />
-      {totalItems > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
-        </View>
-      )}
-    </View>
-  );
+function TabIcon({ name, focused, color, size = 23 }) {
+  const icons = TAB_ICONS[name];
+  return <Ionicons name={focused ? icons.active : icons.inactive} size={size} color={color} />;
 }
 
 function LoginPromptScreen({ navigation, icon, title, message }) {
   return (
-    <View style={styles.loginPrompt}>
-      <Ionicons name={icon} size={64} color="#ddd" />
-      <Text style={styles.loginPromptTitle}>{title}</Text>
-      <Text style={styles.loginPromptMessage}>{message}</Text>
-      <TouchableOpacity
-        style={styles.loginPromptBtn}
-        onPress={() => navigation.navigate('Auth', { screen: 'Login' })}
-      >
-        <Text style={styles.loginPromptBtnText}>Se connecter</Text>
-      </TouchableOpacity>
+    <Screen>
+      <EmptyState
+        icon={icon}
+        title={title}
+        message={message}
+        actionLabel="Se connecter"
+        onAction={() => navigation.navigate('Auth', { screen: 'Login' })}
+        style={{ flex: 1, justifyContent: 'center' }}
+      />
       <TouchableOpacity
         onPress={() => navigation.navigate('Auth', { screen: 'Register' })}
-        style={{ marginTop: 12 }}
+        style={{ alignItems: 'center', paddingBottom: 40 }}
       >
         <Text style={styles.loginPromptLink}>Pas de compte ? S'inscrire</Text>
       </TouchableOpacity>
-    </View>
+    </Screen>
   );
-}
-
-function AuthGatedCart(props) {
-  const { user } = useAuth();
-  if (!user) return <LoginPromptScreen {...props} icon="cart-outline" title="Votre panier" message="Connectez-vous pour ajouter des articles et passer commande." />;
-  return <CartScreen {...props} />;
 }
 
 function AuthGatedOrders(props) {
@@ -98,43 +65,24 @@ function AuthGatedMarket(props) {
 
 function AuthGatedProfile(props) {
   const { user } = useAuth();
-  if (!user) return <LoginPromptScreen {...props} icon="person-outline" title="Votre profil" message="Connectez-vous pour acceder a votre profil et vos parametres." />;
+  if (!user) return <LoginPromptScreen {...props} icon="person-outline" title="Votre profil" message="Connectez-vous pour accéder à votre profil et vos paramètres." />;
   return <ProfileScreen {...props} />;
 }
 
 export default function TabNavigator() {
+  const { totalItems } = useCart();
+  const { totalItems: marketItems } = useMarket();
   return (
     <Tab.Navigator
+      tabBar={(props) => <EstuaireTabBar {...props} centerRoute="Panier" />}
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.inactive,
-        tabBarStyle: {
-          backgroundColor: COLORS.bg,
-          borderTopWidth: 0,
-          elevation: 20,
-          shadowColor: '#000',
-          shadowOpacity: 0.08,
-          shadowRadius: 10,
-          height: 65,
-          paddingBottom: 10,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
-        tabBarIcon: ({ focused, color }) => {
-          if (route.name === 'Marché') return <MarketTabIcon focused={focused} color={color} />;
-          if (route.name === 'Panier') return <CartTabIcon focused={focused} color={color} />;
-          const iconName = focused ? TAB_ICONS[route.name].active : TAB_ICONS[route.name].inactive;
-          return <Ionicons name={iconName} size={24} color={color} />;
-        },
+        tabBarIcon: ({ focused, color, size }) => <TabIcon name={route.name} focused={focused} color={color} size={size} />,
       })}
     >
       <Tab.Screen name="Accueil"   component={HomeScreen} />
-      <Tab.Screen name="Marché"    component={AuthGatedMarket} />
-      <Tab.Screen name="Panier"    component={AuthGatedCart} />
+      <Tab.Screen name="Marché"    component={AuthGatedMarket} options={{ tabBarBadge: marketItems || undefined }} />
+      <Tab.Screen name="Panier"    component={CartScreen} options={{ tabBarBadge: totalItems || undefined }} />
       <Tab.Screen name="Commandes" component={AuthGatedOrders} />
       <Tab.Screen name="Profil"    component={AuthGatedProfile} />
     </Tab.Navigator>
@@ -142,63 +90,5 @@ export default function TabNavigator() {
 }
 
 const styles = StyleSheet.create({
-  badge: {
-    position: 'absolute',
-    right: -6,
-    top: -4,
-    backgroundColor: '#FF6B35',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 3,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  loginPrompt: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 40,
-  },
-  loginPromptTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#1F2937',
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  loginPromptMessage: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  loginPromptBtn: {
-    backgroundColor: '#FF6B35',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    shadowColor: '#FF6B35',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  loginPromptBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  loginPromptLink: {
-    color: '#FF6B35',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  loginPromptLink: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.semibold },
 });

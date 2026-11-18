@@ -1,50 +1,76 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  SafeAreaView, ScrollView, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Switch, FlatList,
-  Dimensions,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
-import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { profileService } from '../../services/profileService';
+import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
+import {
+  Screen, ScreenHeader, Input, Button, Card, Chip, Badge, Divider,
+} from '../../components/ui';
+import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING } from '../../theme';
 
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
-const LABELS = ['Maison', 'Bureau', 'Autre'];
-const { width } = Dimensions.get('window');
+const LABELS = [
+  { key: 'Maison', icon: 'home-outline' },
+  { key: 'Bureau', icon: 'briefcase-outline' },
+  { key: 'Autre',  icon: 'location-outline' },
+];
+const DEFAULT_CITY = 'Bafoussam';
+const NOMINATIM_HEADERS = { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' };
 
-const DEFAULT_REGION = {
-  latitude: 5.4647,
-  longitude: 10.4244,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
-};
+// Géocodage inverse Nominatim → { address, city }
+async function reverseGeocode(latitude, longitude) {
+  const fallback = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+      { headers: NOMINATIM_HEADERS }
+    );
+    const data = await res.json();
+    const a = data.address || {};
+    return {
+      address: data.display_name || fallback,
+      city: a.city || a.town || a.village || a.county || '',
+    };
+  } catch {
+    return { address: fallback, city: '' };
+  }
+}
 
 export default function AddAddressScreen({ route, navigation }) {
-  const { onSave } = route.params || {};
+  const insets = useSafeAreaInsets();
+  const { onSave, address: editing } = route.params || {};
+  const isEdit = !!editing?.id;
+  const { location, selectSavedAddress } = useDeliveryLocation();
 
-  const [label,       setLabel]       = useState('Maison');
-  const [phone,       setPhone]       = useState('');
-  const [isDefault,   setIsDefault]   = useState(false);
+  const initialLabel = editing?.label || 'Maison';
+  const isPreset = LABELS.some(l => l.key === initialLabel);
+
+  const [label,       setLabel]       = useState(isPreset ? initialLabel : 'Autre');
+  const [customLabel, setCustomLabel] = useState(isPreset ? '' : initialLabel);
+  const [addressText, setAddressText] = useState(editing?.address || '');
+  const [details,     setDetails]     = useState(editing?.address_details || '');
+  const [city,        setCity]        = useState(editing?.city || DEFAULT_CITY);
+  const [phone,       setPhone]       = useState(editing?.phone || '');
+  const [isDefault,   setIsDefault]   = useState(!!editing?.is_default);
+  const [coords,      setCoords]      = useState(
+    editing?.latitude && editing?.longitude
+      ? { latitude: Number(editing.latitude), longitude: Number(editing.longitude) }
+      : null
+  );
   const [loading,     setLoading]     = useState(false);
-
-  // Map state
-  const [region,      setRegion]      = useState(DEFAULT_REGION);
-  const [markerCoord, setMarkerCoord] = useState(null);
-  const [addressText, setAddressText] = useState('');
-
-  // GPS state
   const [locating,    setLocating]    = useState(false);
+  const [addressError, setAddressError] = useState('');
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching,   setSearching]   = useState(false);
+  // Recherche Nominatim
+  const [searchQuery,   setSearchQuery]   = useState('');
+  const [searching,     setSearching]     = useState(false);
   const [searchResults, setSearchResults] = useState([]);
 
-  const mapRef = useRef(null);
-
-  // ─── GPS: Me livrer ici ──────────────────────────────────────────────────────
+  // ─── GPS : Utiliser ma position ─────────────────────────────────────────────
   const handleGPS = useCallback(async () => {
     setLocating(true);
     try {
@@ -55,23 +81,14 @@ export default function AddAddressScreen({ route, navigation }) {
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = loc.coords;
+      const geo = await reverseGeocode(latitude, longitude);
 
-      // Reverse geocoding via Nominatim
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-        { headers: { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
-      );
-      const data = await res.json();
-      const addr = data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-
-      setMarkerCoord({ latitude, longitude });
-      setAddressText(addr);
+      setCoords({ latitude, longitude });
+      setAddressText(geo.address);
+      if (geo.city) setCity(geo.city);
+      setAddressError('');
       setSearchQuery('');
       setSearchResults([]);
-
-      const newRegion = { latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 };
-      setRegion(newRegion);
-      mapRef.current?.animateToRegion(newRegion, 800);
     } catch (e) {
       Alert.alert('Erreur', 'Impossible d\'obtenir votre position.');
     } finally {
@@ -79,7 +96,7 @@ export default function AddAddressScreen({ route, navigation }) {
     }
   }, []);
 
-  // ─── Search: Nominatim forward geocoding ────────────────────────────────────
+  // ─── Recherche d'adresse ────────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {
     const q = searchQuery.trim();
     if (!q) return;
@@ -87,11 +104,14 @@ export default function AddAddressScreen({ route, navigation }) {
     setSearchResults([]);
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&accept-language=fr`,
-        { headers: { 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=fr`,
+        { headers: NOMINATIM_HEADERS }
       );
       const data = await res.json();
-      setSearchResults(data);
+      setSearchResults(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length === 0) {
+        Alert.alert('Aucun résultat', 'Essayez avec un quartier ou un repère proche.');
+      }
     } catch (e) {
       Alert.alert('Erreur', 'Impossible de rechercher cette adresse.');
     } finally {
@@ -100,339 +120,265 @@ export default function AddAddressScreen({ route, navigation }) {
   }, [searchQuery]);
 
   const selectSearchResult = useCallback((item) => {
-    const latitude  = parseFloat(item.lat);
-    const longitude = parseFloat(item.lon);
-
-    setMarkerCoord({ latitude, longitude });
+    const a = item.address || {};
+    setCoords({ latitude: parseFloat(item.lat), longitude: parseFloat(item.lon) });
     setAddressText(item.display_name);
+    const c = a.city || a.town || a.village || a.county;
+    if (c) setCity(c);
+    setAddressError('');
     setSearchQuery('');
     setSearchResults([]);
-
-    const newRegion = { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 };
-    setRegion(newRegion);
-    mapRef.current?.animateToRegion(newRegion, 800);
   }, []);
 
-  // ─── Map: tap or drag marker ─────────────────────────────────────────────────
-  const handleMapPress = useCallback(async (e) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    setMarkerCoord({ latitude, longitude });
-
-    // Reverse geocode
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-        { headers: { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
-      );
-      const data = await res.json();
-      setAddressText(data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-    } catch {
-      setAddressText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-    }
-  }, []);
-
-  const handleMarkerDrag = useCallback(async (e) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    setMarkerCoord({ latitude, longitude });
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-        { headers: { 'Accept-Language': 'fr', 'User-Agent': 'RestaurantDeliveryApp/1.0' } }
-      );
-      const data = await res.json();
-      setAddressText(data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-    } catch {
-      setAddressText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-    }
-  }, []);
-
-  // ─── Save ────────────────────────────────────────────────────────────────────
+  // ─── Enregistrement ─────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!addressText.trim()) {
-      Alert.alert('Adresse manquante', 'Sélectionnez une adresse sur la carte ou via la recherche.');
+      setAddressError('Indiquez une adresse, utilisez votre position ou la recherche.');
       return;
     }
+    const finalLabel = label === 'Autre' ? (customLabel.trim() || 'Autre') : label;
+    const payload = {
+      label:           finalLabel,
+      address:         addressText.trim(),
+      address_details: details.trim() || null,
+      city:            city.trim() || DEFAULT_CITY,
+      latitude:        coords?.latitude  ?? null,
+      longitude:       coords?.longitude ?? null,
+      is_default:      isDefault,
+      phone:           phone.trim() || null,
+    };
+
     setLoading(true);
     try {
-      await profileService.addAddress({
-        label,
-        address: addressText.trim(),
-        latitude:   markerCoord?.latitude  ?? null,
-        longitude:  markerCoord?.longitude ?? null,
-        is_default: isDefault,
-        phone:      phone.trim() || null,
-      });
-      if (onSave) onSave();
+      const result = isEdit
+        ? await profileService.updateAddress(editing.id, payload)
+        : await profileService.addAddress(payload);
+      const saved = result?.address || result?.data || result || {};
+      const savedAddress = { ...(isEdit ? editing : {}), ...payload, ...(saved?.id ? saved : {}) };
+
+      // Nouvelle adresse → devient l'adresse de livraison active (ouverte aussi depuis « Livrer à »).
+      // Adresse modifiée → on rafraîchit l'adresse active si c'est elle.
+      if (!isEdit || location?.addressId === editing.id) {
+        selectSavedAddress(savedAddress);
+      }
+      if (onSave) onSave(savedAddress);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Erreur', e.response?.data?.message || 'Impossible d\'ajouter l\'adresse.');
+      Alert.alert(
+        'Erreur',
+        e.response?.data?.message || (isEdit ? 'Impossible de modifier l\'adresse.' : 'Impossible d\'ajouter l\'adresse.')
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Nouvelle adresse</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
+    <Screen>
+      <ScreenHeader
+        title={isEdit ? 'Modifier l\'adresse' : 'Nouvelle adresse'}
+        onBack={() => navigation.goBack()}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' && !Platform.isPad ? 'padding' : undefined}
+      >
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── MAP ── */}
-          <View style={styles.mapContainer}>
-            <MapView
-              ref={mapRef}
-              provider={PROVIDER_DEFAULT}
-              style={styles.map}
-              initialRegion={DEFAULT_REGION}
-              region={region}
-              onPress={handleMapPress}
-              showsUserLocation={false}
-              showsMyLocationButton={false}
-              rotateEnabled={false}
-              pitchEnabled={false}
-            >
-              <UrlTile
-                urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                maximumZ={19}
-                flipY={false}
-              />
-              {markerCoord && (
-                <Marker
-                  coordinate={markerCoord}
-                  draggable
-                  onDragEnd={handleMarkerDrag}
-                  pinColor={COLORS.primary}
-                />
-              )}
-            </MapView>
-
-            {/* GPS button overlay */}
-            <TouchableOpacity style={styles.gpsBtn} onPress={handleGPS} disabled={locating}>
+          {/* ── Position actuelle ── */}
+          <TouchableOpacity
+            style={styles.gpsCard}
+            onPress={handleGPS}
+            disabled={locating}
+            activeOpacity={0.85}
+          >
+            <View style={styles.gpsIcon}>
               {locating
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.gpsBtnText}><Ionicons name="location" size={14} color="#fff" /> Me livrer ici</Text>
-              }
-            </TouchableOpacity>
-          </View>
+                ? <ActivityIndicator color={COLORS.white} />
+                : <Ionicons name="navigate" size={20} color={COLORS.white} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={TYPE.title}>Utiliser ma position</Text>
+              <Text style={TYPE.caption}>
+                {locating ? 'Localisation en cours…' : 'Remplir automatiquement avec le GPS'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+          </TouchableOpacity>
 
-          {/* ── SEARCH ── */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}><Ionicons name="search" size={14} color="#1a1a1a" /> Chercher une adresse</Text>
-            <View style={styles.searchRow}>
-              <TextInput
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Ex: Tamdja, Bafoussam"
-                placeholderTextColor="#aaa"
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-              />
+          {/* ── Recherche ── */}
+          <Text style={styles.sectionTitle}>Ou rechercher une adresse</Text>
+          <Input
+            icon="search-outline"
+            label="Quartier, rue, repère"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Ex : Tamdja, Bafoussam"
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            right={(
               <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={searching}>
                 {searching
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.searchBtnText}>OK</Text>
-                }
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="arrow-forward" size={18} color={COLORS.white} />}
               </TouchableOpacity>
-            </View>
-
-            {searchResults.length > 0 && (
-              <View style={styles.resultsList}>
-                {searchResults.map((item) => (
-                  <TouchableOpacity
-                    key={item.place_id}
-                    style={styles.resultItem}
-                    onPress={() => selectSearchResult(item)}
-                  >
+            )}
+          />
+          {searchResults.length > 0 ? (
+            <Card padded={false} style={styles.results}>
+              {searchResults.map((item, i) => (
+                <React.Fragment key={item.place_id || i}>
+                  {i > 0 ? <Divider style={{ marginLeft: 48 }} /> : null}
+                  <TouchableOpacity style={styles.resultItem} onPress={() => selectSearchResult(item)}>
+                    <Ionicons name="location-outline" size={18} color={COLORS.primary} />
                     <Text style={styles.resultText} numberOfLines={2}>{item.display_name}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-
-          {/* ── ADDRESS PREVIEW ── */}
-          {addressText ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}><Ionicons name="location" size={14} color="#1a1a1a" /> Adresse sélectionnée</Text>
-              <View style={styles.addressPreview}>
-                <Text style={styles.addressPreviewText}>{addressText}</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.section}>
-              <View style={styles.hintBox}>
-                <Text style={styles.hintText}>
-                  Touchez la carte pour placer un marqueur, ou utilisez le GPS / la recherche
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* ── LABEL ── */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Type d'adresse</Text>
-            <View style={styles.labelRow}>
-              {LABELS.map(l => (
-                <TouchableOpacity
-                  key={l}
-                  style={[styles.labelChip, label === l && styles.labelChipActive]}
-                  onPress={() => setLabel(l)}
-                >
-                  <Text style={[styles.labelChipText, label === l && styles.labelChipTextActive]}>{l}</Text>
-                </TouchableOpacity>
+                </React.Fragment>
               ))}
-            </View>
-          </View>
+            </Card>
+          ) : null}
 
-          {/* ── PHONE ── */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}><Ionicons name="call-outline" size={14} color="#1a1a1a" /> Numéro à appeler</Text>
-            <TextInput
-              style={styles.input}
+          {/* ── Type d'adresse ── */}
+          <Text style={styles.sectionTitle}>Type d'adresse</Text>
+          <View style={styles.chips}>
+            {LABELS.map(l => (
+              <Chip
+                key={l.key}
+                label={l.key}
+                icon={l.icon}
+                active={label === l.key}
+                onPress={() => setLabel(l.key)}
+              />
+            ))}
+          </View>
+          {label === 'Autre' ? (
+            <Input
+              icon="pricetag-outline"
+              label="Nom de l'adresse"
+              value={customLabel}
+              onChangeText={setCustomLabel}
+              placeholder="Ex : Chez maman, Université…"
+              style={{ marginTop: 12 }}
+            />
+          ) : null}
+
+          {/* ── Détails ── */}
+          <Text style={styles.sectionTitle}>Détails de livraison</Text>
+          <View style={styles.form}>
+            <View>
+              <Input
+                icon="location-outline"
+                label="Adresse *"
+                value={addressText}
+                onChangeText={(v) => { setAddressText(v); if (addressError) setAddressError(''); }}
+                placeholder="Quartier, rue…"
+                multiline
+                error={addressError}
+              />
+              {coords ? (
+                <Badge
+                  label="Position GPS enregistrée"
+                  icon="checkmark-circle"
+                  color={COLORS.success}
+                  bg={COLORS.successSoft}
+                  style={{ marginTop: 8, marginLeft: 4 }}
+                />
+              ) : null}
+            </View>
+            <Input
+              icon="business-outline"
+              label="Complément (facultatif)"
+              value={details}
+              onChangeText={setDetails}
+              placeholder="Porte, étage, repère proche…"
+            />
+            <Input
+              icon="map-outline"
+              label="Ville"
+              value={city}
+              onChangeText={setCity}
+              placeholder={DEFAULT_CITY}
+            />
+            <Input
+              icon="call-outline"
+              label="Numéro à appeler"
               value={phone}
               onChangeText={setPhone}
-              placeholder="Ex: +237 6XX XXX XXX"
-              placeholderTextColor="#aaa"
+              placeholder="+237 6XX XXX XXX"
               keyboardType="phone-pad"
             />
           </View>
 
-          {/* ── DEFAULT ── */}
-          <View style={[styles.section, styles.switchRow]}>
-            <View>
-              <Text style={styles.switchLabel}>Adresse par défaut</Text>
-              <Text style={styles.switchDesc}>Utilisée automatiquement lors des commandes</Text>
+          {/* ── Par défaut ── */}
+          <Card style={styles.switchCard}>
+            <View style={styles.switchIcon}>
+              <Ionicons name="star-outline" size={18} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={TYPE.title}>Adresse par défaut</Text>
+              <Text style={TYPE.caption}>Utilisée automatiquement lors des commandes</Text>
             </View>
             <Switch
               value={isDefault}
               onValueChange={setIsDefault}
-              trackColor={{ false: '#e0e0e0', true: COLORS.primary }}
-              thumbColor="#fff"
+              trackColor={{ false: COLORS.border, true: COLORS.primary }}
+              thumbColor={COLORS.white}
             />
-          </View>
-
-          {/* ── SAVE ── */}
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={[styles.saveBtn, loading && { opacity: 0.7 }]}
-              onPress={handleSave}
-              disabled={loading}
-            >
-              {loading
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.saveBtnText}>Confirmer cette adresse</Text>
-              }
-            </TouchableOpacity>
-          </View>
+          </Card>
         </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Button
+            title={isEdit ? 'Enregistrer les modifications' : 'Confirmer cette adresse'}
+            icon="checkmark"
+            onPress={handleSave}
+            loading={loading}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  backBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backText:    { fontSize: 24, color: COLORS.text },
-  headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  content: { padding: SCREEN_PADDING, paddingTop: 8, paddingBottom: 32 },
 
-  // Map
-  mapContainer: { height: 260, position: 'relative' },
-  map:          { flex: 1 },
-  gpsBtn: {
-    position: 'absolute', bottom: 12, left: 12,
-    backgroundColor: COLORS.primary, borderRadius: 24,
-    paddingHorizontal: 16, paddingVertical: 10,
-    flexDirection: 'row', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 4,
+  gpsCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.xl,
+    borderWidth: 1.5, borderColor: COLORS.primaryLight, padding: 14,
   },
-  gpsBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-
-  // Sections
-  section: { paddingHorizontal: 16, marginTop: 16 },
-  sectionLabel: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 8 },
-
-  // Search
-  searchRow:   { flexDirection: 'row', gap: 8 },
-  searchInput: {
-    flex: 1, backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: '#e0e0e0',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: COLORS.text,
+  gpsIcon: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center', ...SHADOWS.primary,
   },
+
+  sectionTitle: { ...TYPE.label, color: COLORS.textMuted, marginTop: 22, marginBottom: 10, marginLeft: 4 },
+
   searchBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 12,
-    paddingHorizontal: 18, justifyContent: 'center', alignItems: 'center',
+    width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center',
   },
-  searchBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  results: { marginTop: 8, paddingVertical: 4, ...SHADOWS.sm },
+  resultItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  resultText: { ...TYPE.body, fontSize: 13, lineHeight: 18, flex: 1 },
 
-  resultsList: {
-    backgroundColor: COLORS.card, borderRadius: 12, marginTop: 6,
-    borderWidth: 1, borderColor: '#e0e0e0', overflow: 'hidden',
-  },
-  resultItem: {
-    padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  resultText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 
-  // Address preview
-  addressPreview: {
-    backgroundColor: COLORS.card, borderRadius: 12, padding: 14,
-    borderWidth: 1.5, borderColor: COLORS.primary,
-  },
-  addressPreviewText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
+  form: { gap: 12 },
 
-  hintBox: {
-    backgroundColor: '#FFF3E0', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#FFD7B8',
-  },
-  hintText: { fontSize: 13, color: '#b45309', lineHeight: 18, textAlign: 'center' },
-
-  // Label chips
-  labelRow:           { flexDirection: 'row', gap: 10 },
-  labelChip:          { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: '#e0e0e0', backgroundColor: COLORS.card },
-  labelChipActive:    { borderColor: COLORS.primary, backgroundColor: '#FFF3E0' },
-  labelChipText:      { fontSize: 14, color: COLORS.gray, fontWeight: '600' },
-  labelChipTextActive:{ color: COLORS.primary },
-
-  // Phone input
-  input: {
-    backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: '#e0e0e0',
-    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 15, color: COLORS.text,
+  switchCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, ...SHADOWS.sm },
+  switchIcon: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
   },
 
-  // Switch
-  switchRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: COLORS.card, borderRadius: 14, padding: 16,
+  footer: {
+    paddingHorizontal: SCREEN_PADDING, paddingTop: 12,
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    ...SHADOWS.lg,
   },
-  switchLabel: { fontSize: 15, fontWeight: '600', color: COLORS.text },
-  switchDesc:  { fontSize: 12, color: COLORS.gray, marginTop: 2, maxWidth: 220 },
-
-  // Save button
-  saveBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
-  },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

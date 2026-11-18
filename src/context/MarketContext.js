@@ -7,7 +7,8 @@ export function MarketProvider({ children }) {
   // Each item: { id (uuid), name, quantity, estimatedPrice, note }
 
   const addItem = useCallback((item) => {
-    setItems(prev => [...prev, { ...item, id: Date.now().toString() }]);
+    // id unique même si plusieurs articles sont ajoutés dans la même milliseconde
+    setItems(prev => [...prev, { ...item, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }]);
   }, []);
 
   const updateItem = useCallback((id, updates) => {

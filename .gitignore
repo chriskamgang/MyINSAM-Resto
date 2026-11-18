@@ -39,3 +39,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Dépôts séparés (github.com/chriskamgang/livraison et /livreur)
+/livraison/
+/livreur/
+
+# Secrets et fichiers de build
+UPLOAD_KEY_INFO.txt
+aab-extract/
+*.apk
+*.aab

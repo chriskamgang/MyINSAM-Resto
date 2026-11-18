@@ -1,30 +1,58 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  SafeAreaView, Alert, ActivityIndicator,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { profileService } from '../../services/profileService';
 import { useFocusEffect } from '@react-navigation/native';
+import { profileService } from '../../services/profileService';
+import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
+import {
+  Screen, ScreenHeader, IconButton, Card, Badge, Button, EmptyState, LoadingView, Divider,
+} from '../../components/ui';
+import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING } from '../../theme';
 
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
+// Icône selon le libellé de l'adresse
+function addressIcon(label = '') {
+  const l = String(label).toLowerCase();
+  if (/maison|domicile|home|chez/.test(l)) return 'home-outline';
+  if (/bureau|travail|work|boulot|office/.test(l)) return 'briefcase-outline';
+  return 'location-outline';
+}
+
+function ActionButton({ icon, label, onPress, color = COLORS.primary }) {
+  return (
+    <TouchableOpacity style={styles.action} onPress={onPress} activeOpacity={0.7} hitSlop={6}>
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={[styles.actionText, { color }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function AddressesScreen({ navigation }) {
-  const [addresses, setAddresses] = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const insets = useSafeAreaInsets();
+  const { location, setLocation } = useDeliveryLocation();
+  const [addresses, setAddresses]   = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadAddresses = useCallback(async () => {
     try {
       const data = await profileService.getAddresses();
-      setAddresses(data);
+      setAddresses(Array.isArray(data) ? data : data?.data || []);
     } catch (e) {
       console.error('Erreur adresses:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
+  // Recharge à chaque retour sur l'écran (après ajout / modification)
   useFocusEffect(useCallback(() => { loadAddresses(); }, [loadAddresses]));
+
+  const goAdd = () => navigation.navigate('AddAddress');
+  const goEdit = (address) => navigation.navigate('AddAddress', { address });
 
   const handleDelete = (id) => {
     Alert.alert(
@@ -38,6 +66,8 @@ export default function AddressesScreen({ navigation }) {
             try {
               await profileService.deleteAddress(id);
               setAddresses(prev => prev.filter(a => a.id !== id));
+              // L'adresse supprimée ne doit plus rester l'adresse de livraison active
+              if (location?.addressId === id) setLocation(null);
             } catch (e) {
               Alert.alert('Erreur', 'Impossible de supprimer l\'adresse.');
             }
@@ -57,110 +87,128 @@ export default function AddressesScreen({ navigation }) {
   };
 
   if (loading) {
-    return <View style={styles.loader}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+    return (
+      <Screen>
+        <ScreenHeader title="Mes adresses" onBack={() => navigation.goBack()} />
+        <LoadingView />
+      </Screen>
+    );
   }
 
+  const renderItem = ({ item }) => {
+    const isDefault = !!item.is_default;
+    return (
+      <Card style={[styles.card, isDefault && styles.cardDefault]}>
+        <View style={styles.cardTop}>
+          <View style={[styles.iconTile, isDefault && { backgroundColor: COLORS.primary }]}>
+            <Ionicons
+              name={addressIcon(item.label)}
+              size={20}
+              color={isDefault ? COLORS.white : COLORS.primary}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label} numberOfLines={1}>{item.label || 'Adresse'}</Text>
+              {isDefault ? <Badge label="Par défaut" icon="checkmark-circle" /> : null}
+            </View>
+            <Text style={styles.address} numberOfLines={3}>{item.address}</Text>
+            {item.address_details ? (
+              <Text style={styles.details} numberOfLines={2}>{item.address_details}</Text>
+            ) : null}
+            {item.phone ? (
+              <View style={styles.phoneRow}>
+                <Ionicons name="call-outline" size={13} color={COLORS.textMuted} />
+                <Text style={styles.phone}>{item.phone}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <Divider style={{ marginVertical: 12 }} />
+
+        <View style={styles.actions}>
+          {!isDefault ? (
+            <ActionButton icon="star-outline" label="Par défaut" onPress={() => handleSetDefault(item.id)} />
+          ) : <View style={{ flex: 1 }} />}
+          <View style={styles.actionsRight}>
+            <ActionButton icon="create-outline" label="Modifier" color={COLORS.text} onPress={() => goEdit(item)} />
+            <ActionButton icon="trash-outline" label="Supprimer" color={COLORS.danger} onPress={() => handleDelete(item.id)} />
+          </View>
+        </View>
+      </Card>
+    );
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mes adresses</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}>
-          <Text style={styles.addBtn}>+</Text>
-        </TouchableOpacity>
-      </View>
+    <Screen>
+      <ScreenHeader
+        title="Mes adresses"
+        subtitle={addresses.length ? `${addresses.length} adresse${addresses.length > 1 ? 's' : ''}` : undefined}
+        onBack={() => navigation.goBack()}
+        right={addresses.length ? <IconButton icon="add" color={COLORS.primary} onPress={goAdd} /> : null}
+      />
 
       {addresses.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="location-outline" size={60} color="#ccc" style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Aucune adresse</Text>
-          <Text style={styles.emptySubtitle}>Ajoutez une adresse de livraison</Text>
-          <TouchableOpacity
-            style={styles.addFirstBtn}
-            onPress={() => navigation.navigate('AddAddress', { onSave: loadAddresses })}
-          >
-            <Text style={styles.addFirstBtnText}>+ Ajouter une adresse</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={addresses}
-          keyExtractor={item => String(item.id)}
-          contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => (
-            <View style={[styles.card, item.is_default && styles.cardDefault]}>
-              <View style={styles.cardHeader}>
-                <View style={styles.labelRow}>
-                  <Ionicons name="location" size={16} color="#FF6B35" />
-                  <Text style={styles.labelText}>{item.label || 'Adresse'}</Text>
-                  {item.is_default && (
-                    <View style={styles.defaultBadge}>
-                      <Text style={styles.defaultBadgeText}>Par défaut</Text>
-                    </View>
-                  )}
-                </View>
-                <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.addressText}>{item.address}</Text>
-              {item.phone && (
-                <Text style={styles.phoneText}><Ionicons name="call-outline" size={12} color="#888" /> {item.phone}</Text>
-              )}
-              {!item.is_default && (
-                <TouchableOpacity
-                  style={styles.setDefaultBtn}
-                  onPress={() => handleSetDefault(item.id)}
-                >
-                  <Text style={styles.setDefaultText}>Définir par défaut</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+        <EmptyState
+          icon="location-outline"
+          title="Aucune adresse"
+          message="Ajoutez une adresse pour être livré plus rapidement."
+          actionLabel="Ajouter une adresse"
+          onAction={goAdd}
+          style={{ flex: 1, justifyContent: 'center' }}
         />
+      ) : (
+        <>
+          <FlatList
+            data={addresses}
+            keyExtractor={item => String(item.id)}
+            renderItem={renderItem}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={(
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => { setRefreshing(true); loadAddresses(); }}
+                tintColor={COLORS.primary}
+                colors={[COLORS.primary]}
+              />
+            )}
+          />
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <Button title="Ajouter une adresse" icon="add" onPress={goAdd} />
+          </View>
+        </>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  loader:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  backBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backText:    { fontSize: 24, color: COLORS.text },
-  headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
-  addBtn:      { fontSize: 28, color: COLORS.primary, paddingHorizontal: 8 },
+  list: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 24, gap: 14 },
 
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyEmoji:    { fontSize: 60, marginBottom: 16 },
-  emptyTitle:    { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: COLORS.gray, textAlign: 'center', marginBottom: 28 },
-  addFirstBtn:   { backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14 },
-  addFirstBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-
-  card: {
-    backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 12,
-    borderWidth: 1.5, borderColor: 'transparent',
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+  card: { borderWidth: 1.5, borderColor: 'transparent' },
+  cardDefault: { borderColor: COLORS.primaryLight },
+  cardTop: { flexDirection: 'row', gap: 12 },
+  iconTile: {
+    width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  cardDefault: { borderColor: COLORS.primary },
-  cardHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  labelRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  labelIcon:   { fontSize: 16 },
-  labelText:   { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  defaultBadge: { backgroundColor: '#FFF3E0', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  defaultBadgeText: { fontSize: 11, color: COLORS.primary, fontWeight: '600' },
-  deleteBtn:   { fontSize: 18, padding: 4 },
-  addressText: { fontSize: 14, color: COLORS.gray, lineHeight: 20, marginBottom: 4 },
-  phoneText:   { fontSize: 13, color: COLORS.primary, fontWeight: '600', marginBottom: 8 },
-  setDefaultBtn:  { alignSelf: 'flex-start' },
-  setDefaultText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' },
+  label: { ...TYPE.title, flexShrink: 1 },
+  address: { ...TYPE.bodyMuted, fontSize: 13, lineHeight: 19 },
+  details: { ...TYPE.caption, color: COLORS.textLight, marginTop: 2 },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  phone: { fontFamily: FONTS.medium, fontSize: 12, color: COLORS.text },
+
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  actionsRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  actionText: { fontFamily: FONTS.medium, fontSize: 13 },
+
+  footer: {
+    paddingHorizontal: SCREEN_PADDING, paddingTop: 12,
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    ...SHADOWS.lg,
+  },
 });

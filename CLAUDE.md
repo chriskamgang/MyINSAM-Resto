@@ -60,8 +60,14 @@ Entry: `index.js` → `App.js` → wraps the app in `GestureHandlerRootView` →
 ## Key Conventions
 
 - All components are functional with React Hooks.
-- Styling uses `StyleSheet.create()` inline per component.
-- Primary color: `#FF6B35`, secondary: `#FF8E53`.
+- Styling uses `StyleSheet.create()` per component, but colors, fonts, radii, shadows and `formatPrice()` come from `src/theme/index.js` — never redefine a local `COLORS` object.
+- Shared UI components live in `src/components/ui/index.js` (Screen, ScreenHeader, Button, Input, Card, Chip, Badge, SmartImage, EmptyState…). Use `SmartImage` for every remote image.
+- Font is Poppins (loaded in App.js). Use `fontFamily: FONTS.x`, never `fontWeight` (breaks custom fonts on Android).
+- App.js has no global SafeAreaView: each screen handles the top inset via `<Screen>` or `useSafeAreaInsets()`. The tab bars are `position: 'absolute'`, so tab screens add `TAB_BAR_SPACE` bottom padding.
+- Local design images (login background, home banner, category tiles) are registered in `src/theme/images.js`; `null` entries fall back to gradients/emoji.
+- Delivery location ("Livrer à …") is held in `src/context/DeliveryLocationContext.js` and pre-fills Checkout.
+- Guests can browse and fill the cart; login is required only at checkout.
+- Primary color: `#FF6B35`, secondary: `#FF8E53`, screen background: cream `#FFF9F5`.
 - Currency: XAF (CFA Franc), formatted with French locale.
 - Delivery fee: 500 XAF (or free with applicable coupon).
 - Error handling pattern: try/catch with `Alert.alert()` for user feedback.
@@ -70,6 +76,10 @@ Entry: `index.js` → `App.js` → wraps the app in `GestureHandlerRootView` →
 
 Codemagic (`codemagic.yaml`) handles builds: Android (APK/AAB → Google Play internal track) and iOS (→ App Store Connect). Both use Node 20.11.0 and run `expo prebuild` before native compilation.
 
+## OTA updates (EAS Update)
+
+`expo-updates` is configured in `app.json` (channel `production` via `updates.requestHeaders`). `runtimeVersion` is a fixed string (`"1.0.7"`), decoupled from `version`, so store versions with identical native code (Android 1.0.7, iOS 1.0.8) share the same OTA updates. JS/asset-only changes ship with `eas update --channel production --message "..."`. Any native change (new native module, permission, plugin, Expo SDK upgrade) requires bumping `runtimeVersion` AND a new store build, otherwise old binaries would receive incompatible JS.
+
 ## Known Issues
 
-- `react-native-maps` MapView was removed from app code (still in dependencies) due to crashes — see commits fa0adf3/ddd1e31.
+- `react-native-maps` MapView was removed from most app code due to crashes — see commits fa0adf3/ddd1e31. It is still used behind a toggle in `OrderTrackingScreen.js`; don't add it elsewhere.

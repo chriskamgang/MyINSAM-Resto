@@ -16,6 +16,12 @@ export const paymentService = {
    * @param {number} paymentId
    * @returns {Promise}
    */
+  async initiateGfsPayment(orderId) {
+    // Crée le lien de paiement GFS (le client valide avec son N° client + PIN)
+    const response = await api.post('/payments/initiate-gfs', { order_id: orderId });
+    return response.data;
+  },
+
   async checkPaymentStatus(paymentId) {
     const response = await api.get(`/payments/${paymentId}/status`);
     return response.data;

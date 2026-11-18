@@ -1,72 +1,112 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, RefreshControl,
+  View, Text, StyleSheet, FlatList, ScrollView, RefreshControl, TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { orderService } from '../../services/orderService';
 import { useFocusEffect } from '@react-navigation/native';
+import { orderService } from '../../services/orderService';
+import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { useTabBarSpace } from '../../hooks/useTabBarSpace';
+import { Screen, Card, Chip, Badge, SmartImage, EmptyState, LoadingView, Divider } from '../../components/ui';
 
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
-
-const STATUS_CONFIG = {
-  pending:    { label: 'En attente',     color: '#f59e0b', bg: '#fef3c7', iconName: 'time-outline' },
-  confirmed:  { label: 'Confirmée',      color: '#3b82f6', bg: '#dbeafe', iconName: 'checkmark-circle-outline' },
-  preparing:  { label: 'En préparation', color: '#8b5cf6', bg: '#ede9fe', iconName: 'restaurant-outline' },
-  ready:      { label: 'Prête',          color: '#10b981', bg: '#d1fae5', iconName: 'cube-outline' },
-  picked_up:  { label: 'Récupérée',      color: '#FF6B35', bg: '#FFF3E0', iconName: 'car-outline' },
-  on_the_way: { label: 'En livraison',   color: '#FF6B35', bg: '#FFF3E0', iconName: 'bicycle-outline' },
-  delivered:  { label: 'Livrée',         color: '#22c55e', bg: '#f0fdf4', iconName: 'checkmark-done-circle-outline' },
-  cancelled:  { label: 'Annulée',        color: '#ef4444', bg: '#fee2e2', iconName: 'close-circle-outline' },
+// Statut → libellé, couleurs (tokens du thème) et icône
+export const ORDER_STATUS = {
+  pending:    { label: 'En attente',     color: COLORS.warning, bg: COLORS.warningSoft, icon: 'time-outline' },
+  confirmed:  { label: 'Confirmée',      color: COLORS.info,    bg: COLORS.infoSoft,    icon: 'checkmark-circle-outline' },
+  preparing:  { label: 'En préparation', color: COLORS.info,    bg: COLORS.infoSoft,    icon: 'restaurant-outline' },
+  ready:      { label: 'Prête',          color: COLORS.info,    bg: COLORS.infoSoft,    icon: 'cube-outline' },
+  picked_up:  { label: 'Récupérée',      color: COLORS.primary, bg: COLORS.primarySoft, icon: 'bicycle-outline' },
+  on_the_way: { label: 'En livraison',   color: COLORS.primary, bg: COLORS.primarySoft, icon: 'bicycle-outline' },
+  delivered:  { label: 'Livrée',         color: COLORS.success, bg: COLORS.successSoft, icon: 'checkmark-done-outline' },
+  cancelled:  { label: 'Annulée',        color: COLORS.danger,  bg: COLORS.dangerSoft,  icon: 'close-circle-outline' },
 };
 
-function OrderCard({ order, onPress }) {
-  const status = STATUS_CONFIG[order.status] || { label: order.status, color: COLORS.gray, bg: '#f0f0f0', iconName: 'help-outline' };
-  const date = new Date(order.created_at).toLocaleDateString('fr-FR', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'picked_up', 'on_the_way'];
+// Toute commande en cours peut être suivie
+const TRACKABLE_STATUSES = ACTIVE_STATUSES;
+
+const FILTERS = [
+  { key: 'all',       label: 'Toutes',    match: () => true },
+  { key: 'active',    label: 'En cours',  match: (o) => ACTIVE_STATUSES.includes(o.status) },
+  { key: 'delivered', label: 'Terminées', match: (o) => o.status === 'delivered' },
+  { key: 'cancelled', label: 'Annulées',  match: (o) => o.status === 'cancelled' },
+];
+
+const statusOf = (s) => ORDER_STATUS[s] || { label: s || 'Inconnu', color: COLORS.textMuted, bg: COLORS.divider, icon: 'help-circle-outline' };
+
+function OrderCard({ order, onPress, onTrack }) {
+  const status = statusOf(order.status);
+  const date = order.created_at
+    ? new Date(order.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+  const time = order.created_at
+    ? new Date(order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : '';
+  const itemCount = (order.items || []).reduce((n, i) => n + (Number(i.quantity) || 0), 0);
+  const summary = order.items?.map(i => `${i.quantity}× ${i.item_name || i.name}`).join(', ');
+  const canTrack = TRACKABLE_STATUSES.includes(order.status);
 
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onPress(order)} activeOpacity={0.85}>
-      <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.orderNumber}>Commande #{order.order_number}</Text>
-          <Text style={styles.orderDate}>{date}</Text>
+    <Card style={styles.card} onPress={() => onPress(order)}>
+      <View style={styles.cardTop}>
+        <SmartImage
+          uri={order.restaurant?.logo || order.restaurant?.cover_image}
+          style={styles.thumb}
+          fallbackIcon="storefront-outline"
+          iconSize={24}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.restaurant} numberOfLines={1}>{order.restaurant?.name || 'Restaurant'}</Text>
+          <Text style={styles.orderNumber} numberOfLines={1}>Commande #{order.order_number}</Text>
+          <Text style={TYPE.caption}>{date}{time ? ` · ${time}` : ''}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-          <Text style={[styles.statusText, { color: status.color }]}><Ionicons name={status.iconName} size={12} color={status.color} /> {status.label}</Text>
-        </View>
+        <Badge label={status.label} color={status.color} bg={status.bg} icon={status.icon} />
       </View>
 
-      <View style={styles.cardDivider} />
+      {summary ? <Text style={styles.summary} numberOfLines={2}>{summary}</Text> : null}
 
-      <Text style={styles.itemsList} numberOfLines={2}>
-        {order.items?.map(i => `${i.quantity}× ${i.item_name || i.name}`).join(', ') || 'Articles'}
-      </Text>
+      <Divider style={{ marginVertical: 12 }} />
 
       <View style={styles.cardFooter}>
-        <Text style={styles.cardTotal}>{Number(order.total || order.total_amount || 0).toLocaleString('fr-FR')} XAF</Text>
-        {['picked_up', 'on_the_way', 'preparing', 'ready', 'confirmed'].includes(order.status) && (
-          <Text style={styles.trackLink}>Suivre →</Text>
+        <View>
+          <Text style={TYPE.caption}>{itemCount} article{itemCount > 1 ? 's' : ''}</Text>
+          <Text style={styles.total}>{formatPrice(order.total || order.total_amount)}</Text>
+        </View>
+        {canTrack ? (
+          <TouchableOpacity style={styles.trackBtn} onPress={() => onTrack(order)} activeOpacity={0.85}>
+            <Ionicons name="navigate" size={15} color={COLORS.white} />
+            <Text style={styles.trackText}>Suivre</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.white} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.detailLink}>
+            <Text style={styles.detailText}>Détails</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} />
+          </View>
         )}
       </View>
-    </TouchableOpacity>
+    </Card>
   );
 }
 
 export default function OrdersScreen({ navigation }) {
-  const [orders, setOrders]       = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const tabSpace = useTabBarSpace();
+  const [orders, setOrders]         = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError]           = useState(false);
+  const [filter, setFilter]         = useState('all');
 
   const loadOrders = useCallback(async () => {
     try {
       const data = await orderService.getOrders();
       // La réponse est paginée: { data: [...], total, ... }
-      const list = Array.isArray(data) ? data : (data.data || []);
+      const list = Array.isArray(data) ? data : (data?.data || []);
       setOrders(list);
+      setError(false);
     } catch (e) {
       console.error('Erreur commandes:', e);
+      setError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,73 +117,121 @@ export default function OrdersScreen({ navigation }) {
 
   const onRefresh = () => { setRefreshing(true); loadOrders(); };
 
+  const counts = useMemo(() => {
+    const c = {};
+    FILTERS.forEach(f => { c[f.key] = orders.filter(f.match).length; });
+    return c;
+  }, [orders]);
+
+  const visible = useMemo(() => {
+    const f = FILTERS.find(x => x.key === filter) || FILTERS[0];
+    return orders.filter(f.match);
+  }, [orders, filter]);
+
   if (loading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <Screen><LoadingView label="Chargement de vos commandes…" /></Screen>;
   }
 
+  const goHome = () => navigation.navigate('Main', { screen: 'Accueil' });
+
+  const renderEmpty = () => {
+    if (error) {
+      return (
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Impossible de charger vos commandes"
+          message="Vérifiez votre connexion internet puis réessayez."
+          actionLabel="Réessayer"
+          onAction={() => { setLoading(true); loadOrders(); }}
+        />
+      );
+    }
+    if (orders.length === 0) {
+      return (
+        <EmptyState
+          icon="receipt-outline"
+          title="Aucune commande"
+          message="Vos commandes apparaîtront ici."
+          actionLabel="Commander maintenant"
+          onAction={goHome}
+        />
+      );
+    }
+    return (
+      <EmptyState
+        icon="filter-outline"
+        title="Aucune commande ici"
+        message="Aucune commande ne correspond à ce filtre."
+      />
+    );
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mes commandes</Text>
+        <Text style={TYPE.h1}>Mes commandes</Text>
+        <Text style={TYPE.bodyMuted}>Suivez et retrouvez toutes vos commandes</Text>
       </View>
 
-      {orders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="receipt-outline" size={70} color="#ccc" style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Aucune commande</Text>
-          <Text style={styles.emptySubtitle}>Vos commandes apparaîtront ici</Text>
-          <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.navigate('Main', { screen: 'Accueil' })}>
-            <Text style={styles.menuBtnText}>Commander maintenant</Text>
-          </TouchableOpacity>
+      {orders.length > 0 && (
+        <View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+          >
+            {FILTERS.map(f => (
+              <Chip
+                key={f.key}
+                label={f.label}
+                count={counts[f.key]}
+                active={filter === f.key}
+                onPress={() => setFilter(f.key)}
+              />
+            ))}
+          </ScrollView>
         </View>
-      ) : (
-        <FlatList
-          data={orders}
-          keyExtractor={item => String(item.id)}
-          renderItem={({ item }) => (
-            <OrderCard
-              order={item}
-              onPress={order => navigation.navigate('OrderDetail', { orderId: order.id })}
-            />
-          )}
-          contentContainerStyle={{ padding: 16 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-        />
       )}
-    </SafeAreaView>
+
+      <FlatList
+        data={visible}
+        keyExtractor={item => String(item.id)}
+        renderItem={({ item }) => (
+          <OrderCard
+            order={item}
+            onPress={order => navigation.navigate('OrderDetail', { orderId: order.id })}
+            onTrack={order => navigation.navigate('OrderTracking', { orderId: order.id })}
+          />
+        )}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={[styles.list, { paddingBottom: tabSpace }, visible.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  loader:    { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg },
-  header:    { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  header: { paddingHorizontal: SCREEN_PADDING, paddingTop: 12, paddingBottom: 14 },
+  filters: { paddingHorizontal: SCREEN_PADDING, gap: 10, paddingBottom: 14, paddingTop: 2 },
+  list: { paddingHorizontal: SCREEN_PADDING, paddingTop: 4 },
 
-  card: {
-    backgroundColor: COLORS.card, borderRadius: 16, padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+  card: { marginBottom: 14 },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  thumb: { width: 56, height: 56, borderRadius: RADIUS.md },
+  restaurant: { ...TYPE.title },
+  orderNumber: { fontFamily: FONTS.medium, fontSize: 12, color: COLORS.textMuted },
+  summary: { ...TYPE.caption, marginTop: 12, lineHeight: 18 },
+
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  total: { ...TYPE.price, fontSize: 17 },
+  trackBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill,
+    paddingHorizontal: 16, height: 40, ...SHADOWS.primary,
   },
-  cardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  orderNumber:  { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  orderDate:    { fontSize: 12, color: COLORS.gray, marginTop: 2 },
-  statusBadge:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText:   { fontSize: 12, fontWeight: '700' },
-  cardDivider:  { height: 1, backgroundColor: '#f0f0f0', marginVertical: 12 },
-  itemsList:    { fontSize: 13, color: COLORS.gray, marginBottom: 12, lineHeight: 18 },
-  cardFooter:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTotal:    { fontSize: 16, fontWeight: '800', color: COLORS.primary },
-  trackLink:    { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
-
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyEmoji:    { fontSize: 70, marginBottom: 16 },
-  emptyTitle:    { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: COLORS.gray, textAlign: 'center', marginBottom: 32 },
-  menuBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
-  menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  trackText: { fontFamily: FONTS.semibold, fontSize: 14, color: COLORS.white },
+  detailLink: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  detailText: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.textMuted },
 });

@@ -3,7 +3,7 @@
     "name": "Estuaire Eat",
     "slug": "myinsam-resto",
     "scheme": "com.chrisdev237.myinsamresto1",
-    "version": "1.0.4",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +28,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.chrisdev237.estuaireresto",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "11",
+      "buildNumber": "16",
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "L'application utilise votre position pour définir votre adresse de livraison.",
@@ -41,6 +41,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "versionCode": 15,
       "package": "com.chrisdev237.myinsamresto1",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
@@ -52,7 +53,33 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FF6B35",
+          "sounds": []
+        }
+      ],
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "L'application accède à vos photos pour choisir votre photo de profil.",
+          "cameraPermission": "L'application utilise l'appareil photo pour prendre votre photo de profil."
+        }
+      ]
+    ],
+    "runtimeVersion": "1.0.7",
+    "updates": {
+      "url": "https://u.expo.dev/a1d20e41-dc5c-4bec-bff2-f90d8aee4226",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    }
   }
 }

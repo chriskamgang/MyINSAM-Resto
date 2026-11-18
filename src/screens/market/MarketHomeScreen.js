@@ -1,77 +1,146 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, RefreshControl,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { marketService } from '../../services/marketService';
+import {
+  COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice,
+} from '../../theme';
+import { useTabBarSpace } from '../../hooks/useTabBarSpace';
+import {
+  Screen, Card, Badge, Button, SectionHeader, EmptyState, LoadingView, MetaItem, Divider,
+} from '../../components/ui';
 
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
+// Accent « produits frais » (secondaire, l'orange reste la couleur principale)
+const FRESH = { color: COLORS.success, soft: COLORS.successSoft };
 
 const STATUS_CONFIG = {
-  pending:      { label: 'En attente',        color: '#f59e0b', bg: '#fef3c7', iconName: 'time-outline' },
-  assigned:     { label: 'Coursier assign\u00e9',  color: '#3b82f6', bg: '#dbeafe', iconName: 'person-outline' },
-  at_market:    { label: 'Au march\u00e9',         color: '#8b5cf6', bg: '#ede9fe', iconName: 'storefront-outline' },
-  photos_sent:  { label: 'Photos envoy\u00e9es',   color: '#FF6B35', bg: '#FFF3E0', iconName: 'camera-outline' },
-  validated:    { label: 'Valid\u00e9',             color: '#14b8a6', bg: '#ccfbf1', iconName: 'checkmark-circle-outline' },
-  purchasing:   { label: 'Achats en cours',    color: '#6366f1', bg: '#e0e7ff', iconName: 'cart-outline' },
-  delivering:   { label: 'En livraison',       color: '#FF6B35', bg: '#FFF3E0', iconName: 'bicycle-outline' },
-  delivered:    { label: 'Livr\u00e9',              color: '#22c55e', bg: '#f0fdf4', iconName: 'checkmark-done-circle-outline' },
-  cancelled:    { label: 'Annul\u00e9',             color: '#ef4444', bg: '#fee2e2', iconName: 'close-circle-outline' },
+  pending:      { label: 'En attente',       color: COLORS.warning, bg: COLORS.warningSoft, iconName: 'time-outline' },
+  assigned:     { label: 'Coursier assigné', color: COLORS.info,    bg: COLORS.infoSoft,    iconName: 'person-outline' },
+  at_market:    { label: 'Au marché',        color: '#7C3AED',      bg: '#F1EAFE',          iconName: 'storefront-outline' },
+  photos_sent:  { label: 'Photos envoyées',  color: COLORS.primary, bg: COLORS.primarySoft, iconName: 'camera-outline' },
+  validated:    { label: 'Validé',           color: '#0D9488',      bg: '#E3F7F4',          iconName: 'checkmark-circle-outline' },
+  purchasing:   { label: 'Achats en cours',  color: '#4F46E5',      bg: '#ECEBFE',          iconName: 'cart-outline' },
+  delivering:   { label: 'En livraison',     color: COLORS.primary, bg: COLORS.primarySoft, iconName: 'bicycle-outline' },
+  delivered:    { label: 'Livré',            color: COLORS.success, bg: COLORS.successSoft, iconName: 'checkmark-done-circle-outline' },
+  cancelled:    { label: 'Annulé',           color: COLORS.danger,  bg: COLORS.dangerSoft,  iconName: 'close-circle-outline' },
 };
 
 const PAYMENT_LABELS = {
   mobile_money: 'Mobile Money',
-  on_delivery: 'Paiement \u00e0 la livraison',
+  on_delivery: 'Paiement à la livraison',
 };
 
+const TRACKABLE = ['assigned', 'at_market', 'photos_sent', 'purchasing', 'delivering'];
+
+const HOW_IT_WORKS = [
+  { icon: 'list-outline', label: 'Votre liste' },
+  { icon: 'storefront-outline', label: 'Le coursier achète' },
+  { icon: 'bicycle-outline', label: 'Livré chez vous' },
+];
+
 function MarketOrderCard({ order, onPress }) {
-  const status = STATUS_CONFIG[order.status] || { label: order.status, color: COLORS.gray, bg: '#f0f0f0', iconName: 'help-outline' };
+  const status = STATUS_CONFIG[order.status] || {
+    label: order.status, color: COLORS.textMuted, bg: COLORS.divider, iconName: 'help-outline',
+  };
   const date = new Date(order.created_at).toLocaleDateString('fr-FR', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
   const itemCount = order.items?.length || 0;
   const total = Number(order.total_estimated || order.total || 0);
+  const trackable = TRACKABLE.includes(order.status);
 
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onPress(order)} activeOpacity={0.85}>
+    <Card style={styles.card} onPress={() => onPress(order)}>
       <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.orderNumber}>March\u00e9 #{order.order_number || order.id}</Text>
-          <Text style={styles.orderDate}>{date}</Text>
+        <View style={styles.cardIcon}>
+          <Ionicons name="basket" size={20} color={FRESH.color} />
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-          <Text style={[styles.statusText, { color: status.color }]}>
-            <Ionicons name={status.iconName} size={12} color={status.color} /> {status.label}
-          </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={TYPE.title} numberOfLines={1}>Marché #{order.order_number || order.id}</Text>
+          <Text style={TYPE.caption}>{date}</Text>
         </View>
+        <Badge label={status.label} icon={status.iconName} color={status.color} bg={status.bg} />
       </View>
 
-      <View style={styles.cardDivider} />
+      <Divider style={{ marginVertical: 12 }} />
 
       <View style={styles.cardDetails}>
-        <View style={styles.detailItem}>
-          <Ionicons name="list-outline" size={14} color={COLORS.gray} />
-          <Text style={styles.detailText}>{itemCount} article{itemCount > 1 ? 's' : ''}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Ionicons name="card-outline" size={14} color={COLORS.gray} />
-          <Text style={styles.detailText}>{PAYMENT_LABELS[order.payment_method] || order.payment_method || 'N/A'}</Text>
-        </View>
+        <MetaItem icon="list-outline" size={12} label={`${itemCount} article${itemCount > 1 ? 's' : ''}`} />
+        <MetaItem
+          icon="card-outline"
+          size={12}
+          label={PAYMENT_LABELS[order.payment_method] || order.payment_method || 'N/A'}
+        />
       </View>
 
       <View style={styles.cardFooter}>
-        <Text style={styles.cardTotal}>~{total.toLocaleString('fr-FR')} XAF</Text>
-        {['assigned', 'at_market', 'photos_sent', 'purchasing', 'delivering'].includes(order.status) && (
-          <Text style={styles.trackLink}>Suivre &rarr;</Text>
+        <View>
+          <Text style={TYPE.caption}>Budget estimé</Text>
+          <Text style={TYPE.price}>~{formatPrice(total)}</Text>
+        </View>
+        {trackable ? (
+          <View style={styles.trackPill}>
+            <Ionicons name="navigate" size={13} color={COLORS.white} />
+            <Text style={styles.trackPillText}>Suivre</Text>
+          </View>
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
         )}
       </View>
-    </TouchableOpacity>
+    </Card>
+  );
+}
+
+function MarketHero({ onCreate }) {
+  return (
+    <Card style={styles.hero} padded={false}>
+      <LinearGradient
+        colors={['#EAF7EE', '#FFF4EC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroInner}
+      >
+        <View style={styles.heroTop}>
+          <View style={{ flex: 1 }}>
+            <Badge label="Produits frais" icon="leaf" color={FRESH.color} bg={COLORS.white} />
+            <Text style={styles.heroTitle}>Vos courses au marché, livrées chez vous</Text>
+            <Text style={styles.heroSub}>
+              Créez votre liste, un coursier va au marché, vous valide les articles en photo et vous livre.
+            </Text>
+          </View>
+          <View style={styles.heroEmojiWrap}>
+            <Ionicons name="basket" size={30} color={COLORS.success} />
+          </View>
+        </View>
+
+        <View style={styles.steps}>
+          {HOW_IT_WORKS.map((s, i) => (
+            <React.Fragment key={s.label}>
+              <View style={styles.step}>
+                <View style={styles.stepIcon}>
+                  <Ionicons name={s.icon} size={16} color={COLORS.primary} />
+                </View>
+                <Text style={styles.stepLabel} numberOfLines={2}>{s.label}</Text>
+              </View>
+              {i < HOW_IT_WORKS.length - 1 ? (
+                <Ionicons name="chevron-forward" size={14} color={COLORS.textLight} style={{ marginTop: 9 }} />
+              ) : null}
+            </React.Fragment>
+          ))}
+        </View>
+
+        <Button title="Nouvelle liste de courses" icon="add-circle-outline" onPress={onCreate} size="md" />
+      </LinearGradient>
+    </Card>
   );
 }
 
 export default function MarketHomeScreen({ navigation }) {
+  const tabSpace = useTabBarSpace();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -82,7 +151,7 @@ export default function MarketHomeScreen({ navigation }) {
       const list = Array.isArray(data) ? data : (data.data || []);
       setOrders(list);
     } catch (e) {
-      console.error('Erreur commandes march\u00e9:', e);
+      console.error('Erreur commandes marché:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -92,106 +161,103 @@ export default function MarketHomeScreen({ navigation }) {
   useFocusEffect(useCallback(() => { loadOrders(); }, [loadOrders]));
 
   const onRefresh = () => { setRefreshing(true); loadOrders(); };
+  const goCreate = () => navigation.navigate('CreateMarketList');
 
   if (loading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <Screen><LoadingView label="Chargement de vos courses…" /></Screen>;
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mon March\u00e9</Text>
+        <Text style={TYPE.h1}>Mon Marché</Text>
+        <Text style={TYPE.bodyMuted}>Le marché de Bafoussam, sans vous déplacer</Text>
       </View>
 
-      {orders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="basket-outline" size={70} color="#ccc" style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Faites vos courses au march\u00e9 !</Text>
-          <Text style={styles.emptySubtitle}>
-            Cr\u00e9ez une liste de courses et un coursier ira au march\u00e9 pour vous.
-          </Text>
-          <TouchableOpacity
-            style={styles.menuBtn}
-            onPress={() => navigation.navigate('CreateMarketList')}
-          >
-            <Ionicons name="add-outline" size={18} color="#fff" />
-            <Text style={styles.menuBtnText}> Nouvelle liste</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={orders}
-          keyExtractor={item => String(item.id)}
-          renderItem={({ item }) => (
-            <MarketOrderCard
-              order={item}
-              onPress={order => navigation.navigate('MarketOrderDetail', { orderId: order.id })}
-            />
-          )}
-          contentContainerStyle={{ padding: 16 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-        />
-      )}
+      <FlatList
+        data={orders}
+        keyExtractor={item => String(item.id)}
+        renderItem={({ item }) => (
+          <MarketOrderCard
+            order={item}
+            onPress={order => navigation.navigate('MarketOrderDetail', { orderId: order.id })}
+          />
+        )}
+        ListHeaderComponent={
+          <>
+            <MarketHero onCreate={goCreate} />
+            {orders.length > 0 ? (
+              <SectionHeader title="Mes commandes" style={styles.sectionHeader} />
+            ) : null}
+          </>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="basket-outline"
+            title="Aucune commande marché"
+            message="Vos listes de courses apparaîtront ici dès votre première commande."
+          />
+        }
+        contentContainerStyle={{ paddingBottom: tabSpace + 60 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+      />
 
       {/* FAB */}
       {orders.length > 0 && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate('CreateMarketList')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
+        <TouchableOpacity style={[styles.fab, { bottom: tabSpace - 4 }]} onPress={goCreate} activeOpacity={0.85}>
+          <Ionicons name="add" size={28} color={COLORS.white} />
         </TouchableOpacity>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  loader:    { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg },
-  header: {
-    paddingHorizontal: 20, paddingVertical: 16,
-    backgroundColor: COLORS.primary,
-  },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  header: { paddingHorizontal: SCREEN_PADDING, paddingTop: 12, paddingBottom: 6 },
 
-  card: {
-    backgroundColor: COLORS.card, borderRadius: 16, padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+  hero: { marginHorizontal: SCREEN_PADDING, marginTop: 12, marginBottom: 24, overflow: 'hidden' },
+  heroInner: { padding: 18, borderRadius: RADIUS.xl },
+  heroTop: { flexDirection: 'row', gap: 10 },
+  heroTitle: { fontFamily: FONTS.bold, fontSize: 19, lineHeight: 25, color: COLORS.text, marginTop: 10 },
+  heroSub: { ...TYPE.caption, marginTop: 6 },
+  heroEmojiWrap: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm,
   },
-  cardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  orderNumber:  { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  orderDate:    { fontSize: 12, color: COLORS.gray, marginTop: 2 },
-  statusBadge:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText:   { fontSize: 12, fontWeight: '700' },
-  cardDivider:  { height: 1, backgroundColor: '#f0f0f0', marginVertical: 12 },
-  cardDetails:  { flexDirection: 'row', gap: 16, marginBottom: 12 },
-  detailItem:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  detailText:   { fontSize: 13, color: COLORS.gray },
-  cardFooter:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTotal:    { fontSize: 16, fontWeight: '800', color: COLORS.primary },
-  trackLink:    { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  steps: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.75)', borderRadius: RADIUS.lg,
+    paddingVertical: 12, paddingHorizontal: 10, marginVertical: 16,
+  },
+  step: { flex: 1, alignItems: 'center' },
+  stepIcon: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepLabel: { fontFamily: FONTS.medium, fontSize: 11, lineHeight: 15, color: COLORS.text, marginTop: 6, textAlign: 'center' },
 
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyTitle:     { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 8, textAlign: 'center' },
-  emptySubtitle:  { fontSize: 15, color: COLORS.gray, textAlign: 'center', marginBottom: 32, lineHeight: 22 },
-  menuBtn: {
-    backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 14,
-    borderRadius: 14, flexDirection: 'row', alignItems: 'center',
+  sectionHeader: { marginBottom: 12 },
+
+  card: { marginHorizontal: SCREEN_PADDING, marginBottom: 14 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cardIcon: {
+    width: 42, height: 42, borderRadius: 14, backgroundColor: FRESH.soft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  cardDetails: { flexDirection: 'row', gap: 16, marginBottom: 12, flexWrap: 'wrap' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  trackPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill,
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  trackPillText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white },
 
   fab: {
-    position: 'absolute', bottom: 24, right: 20,
-    width: 56, height: 56, borderRadius: 28,
+    position: 'absolute', right: SCREEN_PADDING,
+    width: 58, height: 58, borderRadius: 29,
     backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 8, elevation: 8,
+    ...SHADOWS.primary,
   },
 });

@@ -38,6 +38,21 @@ export const authService = {
     return { token, user };
   },
 
+  // Mot de passe oublié : envoie un code à 6 chiffres (WhatsApp / email)
+  async forgotPassword(email) {
+    const response = await api.post('/auth/password/forgot', { email });
+    return response.data;
+  },
+
+  // Vérifie le code, change le mot de passe et ouvre une session
+  async resetPassword(email, code, password) {
+    const response = await api.post('/auth/password/reset', { email, code, password });
+    const { token, user } = response.data;
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    return { token, user };
+  },
+
   async logout() {
     try {
       await api.post('/auth/logout');

@@ -1,22 +1,45 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, TextInput, Alert, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMarket } from '../../context/MarketContext';
+import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import {
+  Screen, ScreenHeader, Card, Input, Button, Chip, QuantityStepper, Badge,
+} from '../../components/ui';
 
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
+// Unités courantes au marché ; « autre » permet une quantité libre (ex : « 1 régime »)
+const UNITS = [
+  { key: 'kg',     label: 'kg',     plural: 'kg' },
+  { key: 'tas',    label: 'tas',    plural: 'tas' },
+  { key: 'piece',  label: 'pièce',  plural: 'pièces' },
+  { key: 'botte',  label: 'botte',  plural: 'bottes' },
+  { key: 'litre',  label: 'litre',  plural: 'litres' },
+  { key: 'sac',    label: 'sac',    plural: 'sacs' },
+  { key: 'other',  label: 'Autre',  plural: '' },
+];
+
+const SUGGESTIONS = ['Tomates', 'Oignons', 'Plantain', 'Huile', 'Riz', 'Poisson', 'Piment', 'Ndolè'];
 
 function generateId() {
   return Date.now().toString() + Math.random().toString(36).substr(2, 5);
 }
 
-function createEmptyItem() {
-  return { id: generateId(), name: '', quantity: '', estimatedPrice: '', note: '' };
+function createEmptyItem(name = '') {
+  return { id: generateId(), name, count: 1, unit: 'kg', customQuantity: '', estimatedPrice: '', note: '' };
+}
+
+// Construit la quantité texte envoyée à l'API (format libre, ex : « 2 kg », « 3 tas »)
+function quantityText(item) {
+  if (item.unit === 'other') return item.customQuantity.trim();
+  const u = UNITS.find(x => x.key === item.unit) || UNITS[0];
+  return `${item.count} ${item.count > 1 ? u.plural : u.label}`;
 }
 
 export default function CreateMarketListScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { clearList, addItem } = useMarket();
   const [items, setItems] = useState([createEmptyItem()]);
 
@@ -26,6 +49,14 @@ export default function CreateMarketListScreen({ navigation }) {
 
   const addNewRow = () => {
     setItems(prev => [...prev, createEmptyItem()]);
+  };
+
+  const addSuggestion = (name) => {
+    setItems(prev => {
+      const emptyIdx = prev.findIndex(i => !i.name.trim());
+      if (emptyIdx >= 0) return prev.map((i, idx) => (idx === emptyIdx ? { ...i, name } : i));
+      return [...prev, createEmptyItem(name)];
+    });
   };
 
   const removeRow = (id) => {
@@ -55,7 +86,7 @@ export default function CreateMarketListScreen({ navigation }) {
     validItems.forEach(item => {
       addItem({
         name: item.name.trim(),
-        quantity: item.quantity.trim(),
+        quantity: quantityText(item),
         estimatedPrice: item.estimatedPrice.trim(),
         note: item.note.trim(),
       });
@@ -64,76 +95,129 @@ export default function CreateMarketListScreen({ navigation }) {
     navigation.navigate('MarketOrderSummary');
   };
 
+  const usedNames = items.map(i => i.name.trim().toLowerCase());
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>{'\u2190'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ma liste de courses</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <Screen>
+      <ScreenHeader title="Ma liste de courses" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === 'ios' && !Platform.isPad ? 'padding' : undefined}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 16, paddingBottom: 160 }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scroll}
         >
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="list-outline" size={16} color={COLORS.text} /> Articles
-          </Text>
-          <Text style={styles.sectionSubtitle}>
-            Ajoutez les articles que vous souhaitez acheter au march\u00e9.
+          <Text style={TYPE.h2}>Que voulez-vous acheter ?</Text>
+          <Text style={[TYPE.bodyMuted, { marginTop: 2 }]}>
+            Ajoutez les articles que vous souhaitez acheter au marché.
           </Text>
 
+          {/* Suggestions rapides */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.suggestScroll}
+            contentContainerStyle={styles.suggestRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            {SUGGESTIONS.filter(s => !usedNames.includes(s.toLowerCase())).map(s => (
+              <Chip key={s} label={s} icon="add" onPress={() => addSuggestion(s)} style={styles.suggestChip} />
+            ))}
+          </ScrollView>
+
           {items.map((item, index) => (
-            <View key={item.id} style={styles.itemCard}>
+            <Card key={item.id} style={styles.itemCard}>
               <View style={styles.itemCardHeader}>
-                <Text style={styles.itemNumber}>Article {index + 1}</Text>
-                <TouchableOpacity onPress={() => removeRow(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <View style={styles.itemNumber}>
+                  <Text style={styles.itemNumberText}>{index + 1}</Text>
+                </View>
+                <Text style={[TYPE.title, { flex: 1 }]} numberOfLines={1}>
+                  {item.name.trim() || `Article ${index + 1}`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.trashBtn}
+                  onPress={() => removeRow(item.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="trash-outline" size={17} color={COLORS.danger} />
                 </TouchableOpacity>
               </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder="Nom de l'article (ex: Tomates)"
+              <Input
+                icon="nutrition-outline"
+                label="Article"
+                placeholder="Ex : Tomates"
                 value={item.name}
                 onChangeText={val => updateItemField(item.id, 'name', val)}
-                placeholderTextColor="#aaa"
+                style={styles.field}
               />
 
-              <View style={styles.rowInputs}>
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="Quantit\u00e9 (ex: 2 tas, 1 kg)"
-                  value={item.quantity}
-                  onChangeText={val => updateItemField(item.id, 'quantity', val)}
-                  placeholderTextColor="#aaa"
-                />
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="Prix estim\u00e9 (XAF)"
-                  value={item.estimatedPrice}
-                  onChangeText={val => updateItemField(item.id, 'estimatedPrice', val)}
-                  placeholderTextColor="#aaa"
-                  keyboardType="numeric"
+              <Text style={styles.fieldLabel}>Quantité</Text>
+              <View style={styles.qtyRow}>
+                {item.unit !== 'other' ? (
+                  <QuantityStepper
+                    value={item.count}
+                    onChange={val => updateItemField(item.id, 'count', val)}
+                    min={1}
+                    max={99}
+                    size="sm"
+                  />
+                ) : null}
+                <Badge
+                  label={quantityText(item) || 'À préciser'}
+                  icon="scale-outline"
+                  color={COLORS.success}
+                  bg={COLORS.successSoft}
+                  style={{ alignSelf: 'center' }}
                 />
               </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.unitRow}
+                keyboardShouldPersistTaps="handled"
+              >
+                {UNITS.map(u => (
+                  <Chip
+                    key={u.key}
+                    label={u.label}
+                    active={item.unit === u.key}
+                    onPress={() => updateItemField(item.id, 'unit', u.key)}
+                    style={styles.unitChip}
+                  />
+                ))}
+              </ScrollView>
+              {item.unit === 'other' ? (
+                <Input
+                  icon="create-outline"
+                  placeholder="Précisez (ex : 1 régime, 3 boîtes)"
+                  value={item.customQuantity}
+                  onChangeText={val => updateItemField(item.id, 'customQuantity', val)}
+                  style={styles.field}
+                />
+              ) : null}
 
-              <TextInput
-                style={styles.input}
-                placeholder="Note (optionnel, ex: bien m\u00fbres)"
+              <Input
+                icon="pricetag-outline"
+                label="Prix estimé (FCFA)"
+                placeholder="Ex : 1500"
+                value={item.estimatedPrice}
+                onChangeText={val => updateItemField(item.id, 'estimatedPrice', val.replace(/[^0-9]/g, ''))}
+                keyboardType="numeric"
+                style={styles.field}
+              />
+
+              <Input
+                icon="chatbubble-ellipses-outline"
+                label="Note (optionnel)"
+                placeholder="Ex : bien mûres"
                 value={item.note}
                 onChangeText={val => updateItemField(item.id, 'note', val)}
-                placeholderTextColor="#aaa"
               />
-            </View>
+            </Card>
           ))}
 
           {/* Add item button */}
@@ -142,84 +226,69 @@ export default function CreateMarketListScreen({ navigation }) {
             <Text style={styles.addItemBtnText}>Ajouter un article</Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        <View style={styles.footerInfo}>
-          <Text style={styles.footerLabel}>{validItems.length} article{validItems.length > 1 ? 's' : ''}</Text>
-          <Text style={styles.footerTotal}>
-            Budget estim\u00e9 : {totalEstimated.toLocaleString('fr-FR')} XAF
-          </Text>
+        {/* Footer */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={styles.footerInfo}>
+            <View>
+              <Text style={TYPE.caption}>
+                {validItems.length} article{validItems.length > 1 ? 's' : ''}
+              </Text>
+              <Text style={styles.footerTotalLabel}>Budget estimé</Text>
+            </View>
+            <Text style={styles.footerTotal}>{formatPrice(totalEstimated)}</Text>
+          </View>
+          <Button
+            title="Continuer"
+            iconRight="arrow-forward"
+            onPress={handleContinue}
+            disabled={!canContinue}
+          />
         </View>
-        <TouchableOpacity
-          style={[styles.continueBtn, !canContinue && { opacity: 0.5 }]}
-          onPress={handleContinue}
-          disabled={!canContinue}
-        >
-          <Text style={styles.continueBtnText}>Continuer</Text>
-          <Ionicons name="arrow-forward-outline" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  backBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backText:    { fontSize: 24, color: COLORS.text },
-  headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  scroll: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 24 },
 
-  sectionTitle:    { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  sectionSubtitle: { fontSize: 13, color: COLORS.gray, marginBottom: 16, lineHeight: 18 },
+  suggestScroll: { marginHorizontal: -SCREEN_PADDING, marginTop: 14, marginBottom: 18 },
+  suggestRow: { paddingHorizontal: SCREEN_PADDING, gap: 8 },
+  suggestChip: { height: 36, paddingHorizontal: 12 },
 
-  itemCard: {
-    backgroundColor: COLORS.card, borderRadius: 16, padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+  itemCard: { marginBottom: 14 },
+  itemCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  itemNumber: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  itemCardHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 12,
+  itemNumberText: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.primary },
+  trashBtn: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.dangerSoft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  itemNumber: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 
-  input: {
-    backgroundColor: '#f9f9f9', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: '#e5e7eb',
-    marginBottom: 8,
-  },
-  rowInputs: { flexDirection: 'row', gap: 8 },
+  field: { marginBottom: 10 },
+  fieldLabel: { ...TYPE.label, marginTop: 2, marginBottom: 8, marginLeft: 2 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
+  unitRow: { gap: 6, paddingBottom: 12 },
+  unitChip: { height: 34, paddingHorizontal: 12 },
 
   addItemBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.card, borderRadius: 14, paddingVertical: 14,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, paddingVertical: 16,
     borderWidth: 1.5, borderColor: COLORS.primary, borderStyle: 'dashed',
   },
-  addItemBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.primary },
+  addItemBtnText: { fontFamily: FONTS.semibold, fontSize: 15, color: COLORS.primary },
 
   footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 16, paddingBottom: 32, backgroundColor: COLORS.card,
-    borderTopWidth: 1, borderTopColor: '#f0f0f0',
+    paddingHorizontal: SCREEN_PADDING, paddingTop: 14, backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, ...SHADOWS.lg,
   },
   footerInfo: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 12,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12,
   },
-  footerLabel: { fontSize: 13, color: COLORS.gray },
-  footerTotal: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  continueBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16,
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
-  },
-  continueBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  footerTotalLabel: { fontFamily: FONTS.medium, fontSize: 14, color: COLORS.text },
+  footerTotal: { fontFamily: FONTS.bold, fontSize: 20, color: COLORS.primary },
 });

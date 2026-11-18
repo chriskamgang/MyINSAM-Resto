@@ -1,30 +1,38 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  SafeAreaView, ScrollView, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
-
-const COLORS = { primary: '#FF6B35', bg: '#f8f8f8', card: '#fff', text: '#1a1a1a', gray: '#888' };
+import { useAvatarUpload } from '../../hooks/useAvatarUpload';
+import { Screen, ScreenHeader, Input, Button, SmartImage } from '../../components/ui';
+import { COLORS, FONTS, TYPE, SHADOWS, SCREEN_PADDING } from '../../theme';
 
 export default function EditProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { user, updateUser } = useAuth();
   const [name,    setName]    = useState(user?.name    || '');
   const [phone,   setPhone]   = useState(user?.phone   || '');
   const [loading, setLoading] = useState(false);
+  const [nameError, setNameError] = useState('');
+
+  const avatarUri = user?.avatar_url || user?.avatar || user?.photo || null;
+  const { chooseAvatar, uploading, preview } = useAvatarUpload();
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Le nom est obligatoire.');
+      setNameError('Le nom est obligatoire.');
       return;
     }
+    setNameError('');
     setLoading(true);
     try {
       const result = await profileService.updateProfile({ name: name.trim(), phone: phone.trim() });
-      updateUser(result.user || result);
+      // On fusionne : si l'API ne renvoie qu'une partie du profil, on ne perd pas le reste (rôle, email…)
+      updateUser({ ...user, ...(result?.user || result || {}) });
       Alert.alert('Succès', 'Profil mis à jour !', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
       Alert.alert('Erreur', e.response?.data?.message || 'Impossible de mettre à jour le profil.');
@@ -34,112 +42,113 @@ export default function EditProfileScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Modifier le profil</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+    <Screen>
+      <ScreenHeader title="Modifier le profil" onBack={() => navigation.goBack()} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' && !Platform.isPad ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Avatar */}
           <View style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{name.charAt(0)?.toUpperCase() || '?'}</Text>
-            </View>
+            <TouchableOpacity style={styles.avatarRing} onPress={chooseAvatar} disabled={uploading} activeOpacity={0.85}>
+              {preview ? (
+                <SmartImage source={{ uri: preview }} style={styles.avatar} />
+              ) : avatarUri ? (
+                <SmartImage uri={avatarUri} style={styles.avatar} fallbackIcon="person" iconSize={36} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarText}>{initial}</Text>
+                </View>
+              )}
+              {uploading ? (
+                <View style={styles.avatarOverlay}><ActivityIndicator color={COLORS.white} /></View>
+              ) : null}
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={15} color={COLORS.white} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.changePhoto} onPress={chooseAvatar}>{uploading ? 'Envoi en cours…' : 'Changer la photo'}</Text>
+            <Text style={styles.avatarName} numberOfLines={1}>{name.trim() || 'Votre nom'}</Text>
+            {user?.email ? <Text style={TYPE.caption}>{user.email}</Text> : null}
           </View>
 
-          {/* Champs */}
           <View style={styles.form}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Nom complet *</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Votre nom"
-                autoCapitalize="words"
-                placeholderTextColor="#aaa"
-              />
-            </View>
+            <Input
+              icon="person-outline"
+              label="Nom complet *"
+              value={name}
+              onChangeText={(v) => { setName(v); if (nameError) setNameError(''); }}
+              placeholder="Votre nom"
+              autoCapitalize="words"
+              error={nameError}
+            />
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={[styles.input, styles.inputDisabled]}
+            <View>
+              <Input
+                icon="mail-outline"
+                label="Email"
                 value={user?.email || ''}
                 editable={false}
-                placeholderTextColor="#aaa"
+                inputStyle={{ color: COLORS.textMuted }}
+                right={<Ionicons name="lock-closed-outline" size={16} color={COLORS.textLight} />}
               />
-              <Text style={styles.fieldHint}>L'email ne peut pas être modifié</Text>
+              <Text style={styles.hint}>L'email ne peut pas être modifié</Text>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Téléphone</Text>
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="+237 6XX XXX XXX"
-                keyboardType="phone-pad"
-                placeholderTextColor="#aaa"
-              />
-            </View>
+            <Input
+              icon="call-outline"
+              label="Téléphone"
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="+237 6XX XXX XXX"
+              keyboardType="phone-pad"
+            />
           </View>
-
-          <TouchableOpacity
-            style={[styles.saveBtn, loading && { opacity: 0.7 }]}
-            onPress={handleSave}
-            disabled={loading}
-          >
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.saveBtnText}>Enregistrer</Text>
-            }
-          </TouchableOpacity>
         </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+
+        {/* Bouton d'enregistrement collant */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Button title="Enregistrer" icon="checkmark" onPress={handleSave} loading={loading} />
+        </View>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  backBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backText:    { fontSize: 24, color: COLORS.text },
-  headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  content: { padding: SCREEN_PADDING, paddingBottom: 32 },
 
-  avatarSection: { alignItems: 'center', marginBottom: 28 },
-  avatar:     { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontSize: 36, fontWeight: 'bold', color: '#fff' },
-
-  form:       { gap: 16, marginBottom: 28 },
-  fieldGroup: { gap: 6 },
-  label:      { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  input: {
-    backgroundColor: COLORS.card, borderWidth: 1.5, borderColor: '#e0e0e0',
-    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 15, color: COLORS.text,
+  avatarSection: { alignItems: 'center', marginBottom: 28, marginTop: 4 },
+  avatarRing: {
+    width: 104, height: 104, borderRadius: 52, padding: 4,
+    borderWidth: 3, borderColor: COLORS.primary, marginBottom: 12,
   },
-  inputDisabled: { backgroundColor: '#f5f5f5', color: COLORS.gray },
-  fieldHint: { fontSize: 12, color: COLORS.gray },
-
-  saveBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center',
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+  avatar: { width: '100%', height: '100%', borderRadius: 46 },
+  avatarFallback: { backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: FONTS.bold, fontSize: 38, color: COLORS.primary },
+  avatarName: { ...TYPE.h3 },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject, borderRadius: 52, backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  cameraBadge: {
+    position: 'absolute', right: -2, bottom: -2, width: 32, height: 32, borderRadius: 16,
+    backgroundColor: COLORS.primary, borderWidth: 3, borderColor: COLORS.surface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  changePhoto: { fontFamily: FONTS.semibold, fontSize: 13, color: COLORS.primary, marginTop: -4, marginBottom: 8 },
+
+  form: { gap: 14 },
+  hint: { ...TYPE.caption, color: COLORS.textLight, marginTop: 4, marginLeft: 6 },
+
+  footer: {
+    paddingHorizontal: SCREEN_PADDING, paddingTop: 12,
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    ...SHADOWS.lg,
+  },
 });

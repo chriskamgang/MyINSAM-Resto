@@ -2,10 +2,10 @@ import api from './api';
 
 export const restaurantService = {
   // Liste tous les restaurants (paginé, filtrable)
-  async getRestaurants({ search, category, sort, page = 1 } = {}) {
+  async getRestaurants({ search, categoryId, sort, page = 1 } = {}) {
     const params = { page };
     if (search) params.search = search;
-    if (category) params.category = category;
+    if (categoryId) params.category_id = categoryId; // le backend filtre sur category_id
     if (sort) params.sort = sort;
     const response = await api.get('/restaurants', { params });
     return response.data;

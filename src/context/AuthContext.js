@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/authService';
 import { setOnUnauthorized } from '../services/api';
 import { pushNotificationService } from '../services/pushNotificationService';
@@ -72,6 +73,13 @@ export const AuthProvider = ({ children }) => {
     return u;
   };
 
+  const resetPassword = async (email, code, password) => {
+    const { user: u, token: t } = await authService.resetPassword(email, code, password);
+    setUser(u);
+    setToken(t);
+    return u;
+  };
+
   const logout = async () => {
     await pushNotificationService.removePushToken();
     await authService.logout();
@@ -79,10 +87,14 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
   };
 
-  const updateUser = (updatedUser) => setUser(updatedUser);
+  // Met à jour l'utilisateur en mémoire ET sur le téléphone (sinon perdu au redémarrage)
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser);
+    AsyncStorage.setItem('user', JSON.stringify(updatedUser)).catch(() => {});
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, googleLogin, appleLogin, logout, updateUser, forceLogout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, googleLogin, appleLogin, resetPassword, logout, updateUser, forceLogout }}>
       {children}
     </AuthContext.Provider>
   );

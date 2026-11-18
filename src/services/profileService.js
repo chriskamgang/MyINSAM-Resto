@@ -11,6 +11,19 @@ export const profileService = {
     return response.data;
   },
 
+  // Envoie la photo de profil (multipart). uri = fichier local choisi par l'utilisateur
+  async uploadAvatar(uri) {
+    const name = uri.split('/').pop() || 'avatar.jpg';
+    const ext = (name.split('.').pop() || 'jpg').toLowerCase();
+    const form = new FormData();
+    form.append('avatar', { uri, name, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+    const response = await api.post('/profile/avatar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return response.data; // { message, avatar }
+  },
+
   async getAddresses() {
     const response = await api.get('/profile/addresses');
     return response.data;
