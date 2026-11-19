@@ -298,7 +298,10 @@ export default function ItemDetailScreen({ route, navigation }) {
   const description = clean(item.description);
   const isAvailable = item.is_available !== false && item.is_available !== 0;
   const hint = availabilityHint(description);
-  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : 'Indisponible';
+  // Menu du jour : jours de service envoyés par le serveur (null = tous les jours)
+  const servedDays = item.available_days_label || null;
+  const unavailableLabel = servedDays ? `Servi le ${servedDays}` : 'Indisponible';
+  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : unavailableLabel;
 
   // Restaurant
   const restoRating = Number(restaurant?.rating) || 0;
@@ -318,6 +321,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   if (item.is_spicy) tiles.push({ icon: 'flame-outline', title: 'Épicé', sub: 'Relevé' });
   if (item.is_vegetarian) tiles.push({ icon: 'leaf-outline', title: 'Végétarien', sub: 'Sans viande' });
   if (item.calories) tiles.push({ icon: 'nutrition-outline', title: `${item.calories} kcal`, sub: 'Énergie' });
+  if (servedDays) tiles.push({ icon: 'calendar-outline', title: servedDays.charAt(0).toUpperCase() + servedDays.slice(1), sub: 'Jours de service', color: isAvailable ? undefined : COLORS.danger });
   if (tiles.length < 4) {
     tiles.push(isAvailable
       ? { icon: 'checkmark-circle-outline', title: 'Disponible', sub: 'Statut', color: COLORS.success }
@@ -548,7 +552,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                 <Ionicons name={isAvailable ? 'cart-outline' : 'close-circle-outline'} size={26} color={COLORS.white} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.addMainTitle} numberOfLines={1}>
-                    {!isAvailable ? 'Indisponible' : adding === 'cart' ? 'Ajout…' : 'Ajouter au panier'}
+                    {!isAvailable ? (servedDays ? "Pas servi aujourd'hui" : 'Indisponible') : adding === 'cart' ? 'Ajout…' : 'Ajouter au panier'}
                   </Text>
                   <Text style={styles.addMainSub} numberOfLines={1}>{formatPrice(totalPrice)}</Text>
                 </View>

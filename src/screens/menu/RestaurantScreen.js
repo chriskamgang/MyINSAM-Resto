@@ -217,7 +217,11 @@ function DishCard({ item, liked, onLike, onPress, onAdd }) {
     <TouchableOpacity style={styles.dishCard} onPress={() => onPress(item)} activeOpacity={0.9}>
       <SmartImage uri={item.image} style={styles.dishImage} iconSize={30}>
         {unavailable ? (
-          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText}>Indisponible</Text></View>
+          <View style={styles.dishUnavailable}>
+            <Text style={styles.dishUnavailableText} numberOfLines={3}>
+              {item.available_days_label ? `Servi le ${item.available_days_label}` : 'Indisponible'}
+            </Text>
+          </View>
         ) : null}
         {hasPromo ? (
           <View style={[styles.dishTag, { backgroundColor: COLORS.success }]}>
@@ -894,7 +898,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,20,31,0.45)',
     alignItems: 'center', justifyContent: 'center',
   },
-  dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white },
+  dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white, textAlign: 'center', paddingHorizontal: 8 },
   dishBody: { padding: 10, paddingTop: 8, flex: 1 },
   dishName: { fontFamily: FONTS.semibold, fontSize: 13, lineHeight: 18, color: COLORS.text },
   dishDesc: { fontFamily: FONTS.regular, fontSize: 11, lineHeight: 15, color: COLORS.textMuted, marginTop: 2 },
