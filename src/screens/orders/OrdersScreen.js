@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { orderService } from '../../services/orderService';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
-import { Screen, Card, Chip, Badge, SmartImage, EmptyState, LoadingView, Divider } from '../../components/ui';
+import { Screen, Card, Chip, Badge, SmartImage, EmptyState, LoadingView, Divider, IconButton } from '../../components/ui';
 
 // Statut → libellé, couleurs (tokens du thème) et icône
 export const ORDER_STATUS = {
@@ -169,6 +169,7 @@ export default function OrdersScreen({ navigation }) {
   return (
     <Screen>
       <View style={styles.header}>
+        <IconButton icon="arrow-back" size={36} onPress={() => navigation.goBack()} style={{ marginBottom: 8 }} />
         <Text style={TYPE.h1}>Mes commandes</Text>
         <Text style={TYPE.bodyMuted}>Suivez et retrouvez toutes vos commandes</Text>
       </View>

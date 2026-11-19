@@ -172,8 +172,9 @@ export default function ProfileScreen({ navigation }) {
         <Group title="Commandes">
           <ListRow
             icon="receipt-outline" title="Mes commandes" subtitle="Historique de toutes vos commandes"
-            onPress={() => navigation.navigate('Main', { screen: 'Commandes' })}
+            onPress={() => navigation.navigate('Orders')}
           />
+          <ListRow icon="basket-outline" title="Mon Marché" subtitle="Faire mes courses au marché" onPress={() => navigation.navigate('MarketHome')} />
         </Group>
 
         <Group title="Aide & support">

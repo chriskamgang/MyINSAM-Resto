@@ -243,24 +243,28 @@ export function SectionHeader({ title, icon, actionLabel = 'Voir tout', onAction
 
 // ── Image distante avec repli propre (fond dégradé + icône discrète) ──
 // Évite les gros blocs gris vides quand un plat n'a pas de photo.
-export function SmartImage({ uri, source, style, fallbackIcon = 'restaurant-outline', iconSize = 28, resizeMode = 'cover', children }) {
+export function SmartImage({ uri, source, fallbackSource, style, fallbackIcon = 'restaurant-outline', iconSize = 28, resizeMode = 'cover', children }) {
   const [failed, setFailed] = useState(false);
   const url = source ? null : getImageUrl(uri);
   const hasImage = source || (url && !failed);
+  const fillImage = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' };
   return (
     <View style={[{ overflow: 'hidden', backgroundColor: COLORS.surfaceAlt }, style]}>
-      {hasImage ? (
-        <Image
-          source={source || { uri: url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode={resizeMode}
-          onError={() => setFailed(true)}
-        />
-      ) : (
+      {fallbackSource ? (
+        <Image source={fallbackSource} style={fillImage} resizeMode={resizeMode} />
+      ) : !hasImage ? (
         <LinearGradient colors={['#FFF4EC', '#FFE6D6']} style={[StyleSheet.absoluteFill, styles.fallback]}>
           <Ionicons name={fallbackIcon} size={iconSize} color="#F3B79A" />
         </LinearGradient>
-      )}
+      ) : null}
+      {hasImage ? (
+        <Image
+          source={source || { uri: url }}
+          style={fillImage}
+          resizeMode={resizeMode}
+          onError={() => setFailed(true)}
+        />
+      ) : null}
       {children}
     </View>
   );

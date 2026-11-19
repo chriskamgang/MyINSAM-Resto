@@ -1,27 +1,26 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, FONTS } from '../theme';
 import EstuaireTabBar from './EstuaireTabBar';
 import { Screen, EmptyState } from '../components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
-import { useMarket } from '../context/MarketContext';
 import { useAuth } from '../context/AuthContext';
 
 import HomeScreen    from '../screens/menu/HomeScreen';
-import MarketHomeScreen from '../screens/market/MarketHomeScreen';
+import RestaurantListScreen from '../screens/menu/RestaurantListScreen';
 import CartScreen    from '../screens/cart/CartScreen';
-import OrdersScreen  from '../screens/orders/OrdersScreen';
+import FavoritesScreen from '../screens/profile/FavoritesScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
 const TAB_ICONS = {
   Accueil:   { active: 'home',      inactive: 'home-outline' },
-  'Marché':  { active: 'basket',    inactive: 'basket-outline' },
+  Explorer:  { active: 'compass',   inactive: 'compass-outline' },
   Panier:    { active: 'cart',      inactive: 'cart-outline' },
-  Commandes: { active: 'receipt',   inactive: 'receipt-outline' },
+  Favoris:   { active: 'heart',     inactive: 'heart-outline' },
   Profil:    { active: 'person',    inactive: 'person-outline' },
 };
 
@@ -51,16 +50,10 @@ function LoginPromptScreen({ navigation, icon, title, message }) {
   );
 }
 
-function AuthGatedOrders(props) {
+function AuthGatedFavorites(props) {
   const { user } = useAuth();
-  if (!user) return <LoginPromptScreen {...props} icon="receipt-outline" title="Vos commandes" message="Connectez-vous pour voir l'historique de vos commandes." />;
-  return <OrdersScreen {...props} />;
-}
-
-function AuthGatedMarket(props) {
-  const { user } = useAuth();
-  if (!user) return <LoginPromptScreen {...props} icon="basket-outline" title="Mon Marché" message="Connectez-vous pour faire vos courses au marché." />;
-  return <MarketHomeScreen {...props} />;
+  if (!user) return <LoginPromptScreen {...props} icon="heart-outline" title="Vos favoris" message="Connectez-vous pour retrouver vos restaurants et plats favoris." />;
+  return <FavoritesScreen {...props} isTab />;
 }
 
 function AuthGatedProfile(props) {
@@ -69,9 +62,12 @@ function AuthGatedProfile(props) {
   return <ProfileScreen {...props} />;
 }
 
+function ExplorerTabScreen(props) {
+  return <RestaurantListScreen {...props} isTab />;
+}
+
 export default function TabNavigator() {
   const { totalItems } = useCart();
-  const { totalItems: marketItems } = useMarket();
   return (
     <Tab.Navigator
       tabBar={(props) => <EstuaireTabBar {...props} centerRoute="Panier" />}
@@ -81,9 +77,9 @@ export default function TabNavigator() {
       })}
     >
       <Tab.Screen name="Accueil"   component={HomeScreen} />
-      <Tab.Screen name="Marché"    component={AuthGatedMarket} options={{ tabBarBadge: marketItems || undefined }} />
+      <Tab.Screen name="Explorer"  component={ExplorerTabScreen} />
       <Tab.Screen name="Panier"    component={CartScreen} options={{ tabBarBadge: totalItems || undefined }} />
-      <Tab.Screen name="Commandes" component={AuthGatedOrders} />
+      <Tab.Screen name="Favoris"   component={AuthGatedFavorites} />
       <Tab.Screen name="Profil"    component={AuthGatedProfile} />
     </Tab.Navigator>
   );

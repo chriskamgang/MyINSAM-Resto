@@ -6,7 +6,7 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { Screen, ScreenHeader, Chip, SmartImage, Rating, EmptyState, LoadingView } from '../../components/ui';
 
-export default function FavoritesScreen({ navigation }) {
+export default function FavoritesScreen({ navigation, isTab = false }) {
   const insets = useSafeAreaInsets();
   const { restaurants, items, loading, refresh, toggleFavorite } = useFavorites();
   const [tab, setTab] = useState('restaurants');
@@ -57,7 +57,7 @@ export default function FavoritesScreen({ navigation }) {
 
   return (
     <Screen>
-      <ScreenHeader title="Mes favoris" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Mes favoris" onBack={isTab ? undefined : () => navigation.goBack()} />
       <View style={styles.tabs}>
         <Chip label="Restaurants" count={restaurants.length} active={tab === 'restaurants'} onPress={() => setTab('restaurants')} />
         <Chip label="Plats" count={items.length} active={tab === 'items'} onPress={() => setTab('items')} />
@@ -68,7 +68,7 @@ export default function FavoritesScreen({ navigation }) {
           data={data}
           keyExtractor={(x) => `${tab}-${x.id}`}
           renderItem={tab === 'restaurants' ? renderRestaurant : renderItem}
-          contentContainerStyle={{ paddingHorizontal: SCREEN_PADDING, gap: 12, paddingBottom: insets.bottom + 24, flexGrow: 1 }}
+          contentContainerStyle={{ paddingHorizontal: SCREEN_PADDING, gap: 12, paddingBottom: insets.bottom + (isTab ? 105 : 24), flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
           ListEmptyComponent={(
             <EmptyState

@@ -1,42 +1,45 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView,
-  RefreshControl, Dimensions, Image, ActivityIndicator, Modal,
+  RefreshControl, Dimensions, Image, ActivityIndicator, Share,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, cancelAnimation, scrollTo, useAnimatedRef, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { restaurantService } from '../../services/restaurantService';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
-import { useDeliveryLocation, distanceKm } from '../../context/DeliveryLocationContext';
+import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
-import { IMAGES, categoryImage, categoryIcon } from '../../theme/images';
+import { categoryImage, categoryIcon } from '../../theme/images';
 import {
   Screen, SearchBar, SectionHeader, SmartImage, Rating, MetaItem, EmptyState, LoadingView, IconButton,
 } from '../../components/ui';
 import DeliveryLocationSheet from '../../components/DeliveryLocationSheet';
-const CAMPAIGN = require('../../../assets/images/home-campaign.png');
+import RestaurantFeatureCard from '../../components/RestaurantFeatureCard';
+const HERO_IMAGE = require('../../../assets/images/home-grill-hero.png');
+const CLOCHE_IMAGE = require('../../../assets/images/home-cloche-banner.png');
+const PROMO_GIFT = require('../../../assets/images/restaurant-promo-gift.png');
 
 const { width } = Dimensions.get('window');
-const BANNER_WIDTH = width - SCREEN_PADDING * 2;
-const POPULAR_CARD_W = Math.min(150, (width - SCREEN_PADDING * 2 - 24) / 2.3);
+const BANNER_WIDTH = width;
 const CATEGORY_SPRITE = require('../../../assets/images/home-categories.png');
-const DESSERT_IMAGE = require('../../../assets/images/home-dessert.png');
 const CAMEROON_DISH_IMAGE = require('../../../assets/images/category-cameroon-ndole.png');
 const GRILLADES_IMAGE = require('../../../assets/images/category-grillades.png');
+const PIZZA_IMAGE = require('../../../assets/images/category-pizza.png');
 const dishCategoryText = (dish) => `${dish.name || ''} ${dish.description || ''} ${dish._menuCategory || ''} ${dish.category?.name || ''} ${dish.category_name || ''}`;
 const dishTypeText = (dish) => `${dish.name || ''} ${dish._menuCategory || ''} ${dish.category?.name || ''} ${dish.category_name || ''}`;
 const FOOD_CATEGORIES = [
   { id: 'all', name: 'Tous', image: CAMEROON_DISH_IMAGE, matcher: null },
   { id: 'chicken', name: 'Poulet', imageIndex: 1, matcher: /poulet|chicken|wings?|tenders?/i },
+  { id: 'pizza', name: 'Pizza', image: PIZZA_IMAGE, matcher: /pizza/i },
   { id: 'grillades', name: 'Grillades', image: GRILLADES_IMAGE, matcher: /grill|brais|brochette|soya|barbecue|bbq/i },
-  { id: 'sides', name: 'Accompagnements', imageIndex: 3, matcher: /frite|riz|plantain|accompagn|garniture|légume|legume/i },
+  { id: 'fries', name: 'Frites', imageIndex: 3, matcher: /frite|chips/i },
   { id: 'drinks', name: 'Boissons', imageIndex: 4, matcher: /boisson|soda|\bjus\b|cola|\beau\b|café|cafe|\bthé\b|smoothie|limonade|milkshake/i },
-  { id: 'desserts', name: 'Desserts', imageIndex: null, matcher: /dessert|glace|gâteau|gateau|pâtisserie|patisserie/i },
 ];
 
 const deliveryTime = (r) => {
@@ -52,36 +55,9 @@ function CategoryItem({ category, active, onPress }) {
   const img = categoryImage(category.slug);
   return (
     <TouchableOpacity style={styles.catItem} onPress={onPress} activeOpacity={0.8}>
-      <View style={[styles.catCircle, active && styles.catCircleActive]}>
-        {category.image ? <Image source={category.image} resizeMode="cover" style={[styles.catImage, category.id === 'all' && styles.catImageAll]} /> : category.imageIndex != null ? <Image source={CATEGORY_SPRITE} resizeMode="stretch" style={{ position: 'absolute', width: 270, height: 90, left: -category.imageIndex * 54, top: -18 }} /> : category.id === 'desserts' ? <Image source={DESSERT_IMAGE} style={styles.catImage} /> : img ? <Image source={img} style={styles.catImage} /> : <Ionicons name={categoryIcon(category.name)} size={25} color={COLORS.primary} />}
-      </View>
-      <Text style={[styles.catLabel, active && { color: COLORS.primary, fontFamily: FONTS.semibold }]} numberOfLines={1}>
-        {category.name}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-// ── Carte restaurant populaire (défilement horizontal) ──
-function PopularCard({ restaurant, onPress, liked, onLike }) {
-  return (
-    <TouchableOpacity style={styles.popCard} onPress={onPress} activeOpacity={0.9}>
-      <SmartImage uri={restaurant.cover_image || restaurant.logo} style={styles.popImage} fallbackIcon="storefront-outline">
-        <TouchableOpacity style={styles.popHeart} onPress={onLike} hitSlop={8} activeOpacity={0.8}>
-          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={16} color={liked ? COLORS.danger : COLORS.text} />
-        </TouchableOpacity>
-        {restaurant.is_open != null && !Boolean(restaurant.is_open) && (
-          <View style={styles.closedOverlay}><Text style={styles.closedText}>Fermé</Text></View>
-        )}
-      </SmartImage>
-      <View style={styles.popBody}>
-        <Text style={styles.popName} numberOfLines={1}>{restaurant.name}</Text>
-        <Text style={styles.popCuisine} numberOfLines={1}>{restaurant.category?.name || 'Restaurant'}</Text>
-        <Rating value={restaurant.rating} count={restaurant.ratings_count} size={11} style={{ marginTop: 4 }} />
-        <View style={styles.popMeta}>
-          <MetaItem icon="time-outline" label={deliveryTime(restaurant)} size={10} />
-          <MetaItem icon="bicycle-outline" label={Number(restaurant.delivery_fee) > 0 ? formatPrice(restaurant.delivery_fee) : 'Offerte'} size={10} />
-        </View>
+      <View style={[styles.catTile, active && styles.catTileActive]}>
+        {category.id === 'all' ? <MaterialCommunityIcons name="room-service-outline" size={38} color={active ? '#fff' : COLORS.primary} style={{ marginTop: 6 }} /> : category.image ? <Image source={category.image} resizeMode="cover" style={styles.catImage} /> : category.imageIndex != null ? <Image source={CATEGORY_SPRITE} resizeMode="stretch" style={{ position: 'absolute', width: 250, height: 84, left: -category.imageIndex * 50, top: -5 }} /> : img ? <Image source={img} style={styles.catImage} /> : <Ionicons name={categoryIcon(category.name)} size={25} color={COLORS.primary} />}
+        <Text style={[styles.catLabel, active && styles.catLabelActive]} numberOfLines={1}>{category.name}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -127,35 +103,13 @@ function DishRow({ item, onPress, onAdd }) {
   );
 }
 
-function ComboCard({ item, index, onPress, onAdd, liked, onLike }) {
-  const price = item.discount_price && Number(item.discount_price) < Number(item.price) ? item.discount_price : item.price;
-  const badge = Number(item.discount_price) > 0 && Number(item.discount_price) < Number(item.price)
-    ? 'OFFRE SPÉCIALE' : item.is_bestseller || item.is_popular ? 'BEST-SELLER' : null;
-  return (
-    <TouchableOpacity style={styles.comboCard} onPress={onPress} activeOpacity={0.9}>
-      <View style={styles.comboImageWrap}>
-        <SmartImage uri={item.image} style={styles.comboImage} iconSize={36} />
-        {badge && <Text style={styles.comboBadge}>{badge}</Text>}
-        <TouchableOpacity style={styles.comboHeart} onPress={onLike} hitSlop={8}>
-          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={19} color={liked ? COLORS.primary : '#666'} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.comboBody}>
-        <Text style={styles.comboTitle} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.comboSubtitle} numberOfLines={1}>{item._restaurant?.name}</Text>
-        <View style={styles.comboRating}><Ionicons name="star" size={13} color="#FFB400" /><Text style={styles.comboRatingText}>{Number(item._restaurant?.rating) > 0 ? Number(item._restaurant.rating).toFixed(1) : 'Nouveau'}</Text></View>
-        <View style={styles.comboBottom}><Text style={styles.comboPrice} numberOfLines={1}>{formatPrice(price)}</Text><TouchableOpacity style={styles.comboAdd} onPress={onAdd} accessibilityLabel={`Ajouter ${item.name} au panier`} hitSlop={6}><Ionicons name="add" size={19} color="#fff" /></TouchableOpacity></View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 export default function HomeScreen({ navigation }) {
   const isFocused = useIsFocused();
   const tabSpace = useTabBarSpace();
   const { user } = useAuth();
-  const { totalItems, addItem } = useCart();
-  const { location, displayLabel } = useDeliveryLocation();
+  const { addItem } = useCart();
+  const { displayLabel } = useDeliveryLocation();
+  const insets = useSafeAreaInsets();
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const [restaurants, setRestaurants] = useState([]);
@@ -163,8 +117,6 @@ export default function HomeScreen({ navigation }) {
   const [remoteRestaurants, setRemoteRestaurants] = useState([]);
   const [remoteSearching, setRemoteSearching] = useState(false);
   const [activeCat, setActiveCat]     = useState(null);
-  const [showAllDishes, setShowAllDishes] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch]           = useState('');
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
@@ -183,7 +135,7 @@ export default function HomeScreen({ navigation }) {
   const bannerAutoEndRef = useRef(null);
   const bannerIndexRef = useRef(0);
   const [bannerIndex, setBannerIndex] = useState(0);
-  const [nearbyY, setNearbyY] = useState(0);
+  const [featureIndex, setFeatureIndex] = useState(0);
 
   // Plats de tous les restaurants, chargés en arrière-plan pour la recherche
   const loadDishes = useCallback(async (list, reset) => {
@@ -236,42 +188,12 @@ export default function HomeScreen({ navigation }) {
     }
   }, [hasMore, loadingMore, page, loadDishes]);
 
-  const onScroll = ({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 400) loadMore();
-  };
-
-  const filtered = useMemo(
-    () => (typeof activeCat === 'number' ? restaurants.filter((r) => r.category_id === activeCat) : restaurants),
-    [restaurants, activeCat],
-  );
-
-  const activeRestaurants = useMemo(() => [...restaurants]
-    .filter((r) => r.is_open == null || Boolean(r.is_open))
-    .sort((a, b) => (Number(b.orders_count) || 0) - (Number(a.orders_count) || 0)
-      || (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)
-      || (Number(b.rating) || 0) - (Number(a.rating) || 0))
-    .slice(0, 10), [restaurants]);
-
-  // Trie par distance quand on connaît la position de livraison
-  const nearby = useMemo(() => {
-    const withKm = filtered.map((r) => ({
-      r,
-      km: location?.latitude && r.latitude
-        ? distanceKm(location, { latitude: Number(r.latitude), longitude: Number(r.longitude) })
-        : null,
-    }));
-    if (withKm.some((x) => x.km != null)) withKm.sort((a, b) => (a.km ?? 9999) - (b.km ?? 9999));
-    // Les restaurants mis en avant par l'admin restent en tête
-    withKm.sort((a, b) => (b.r.is_pinned ? 1 : 0) - (a.r.is_pinned ? 1 : 0));
-    return withKm;
-  }, [filtered, location]);
-
   const q = search.trim().toLowerCase();
   const categoryMatcher = FOOD_CATEGORIES.find((c) => c.id === activeCat)?.matcher;
-  const selectCategory = (id) => { setActiveCat(id === 'all' ? null : id); setShowAllDishes(false); };
+  const selectCategory = (id) => { setActiveCat(id === 'all' ? null : id); setFeatureIndex(0); };
   useEffect(() => {
-    if ((q.length >= 2 || showAllDishes) && hasMore && !loadingMore) loadMore();
-  }, [q, showAllDishes, hasMore, loadingMore, loadMore]);
+    if (!loading && hasMore && !loadingMore) loadMore();
+  }, [loading, hasMore, loadingMore, loadMore]);
   useEffect(() => {
     setRemoteRestaurants([]);
     if (q.length < 2) { setRemoteSearching(false); return undefined; }
@@ -299,23 +221,17 @@ export default function HomeScreen({ navigation }) {
   const searchRestaurants = useMemo(() => {
     if (!q) return [];
     const allRestaurants = [...restaurants, ...remoteRestaurants.filter((r) => !restaurants.some((local) => local.id === r.id))];
-    const byName = allRestaurants.filter((r) => r.name?.toLowerCase().includes(q) || r.category?.name?.toLowerCase().includes(q));
+    const hasSelectedCategory = (restaurant) => !categoryMatcher || dishes.some((dish) => dish._restaurant?.id === restaurant.id && categoryMatcher.test(dishTypeText(dish)));
+    const byName = allRestaurants.filter((r) => hasSelectedCategory(r) && (r.name?.toLowerCase().includes(q) || r.category?.name?.toLowerCase().includes(q)));
     const dishCount = {};
     searchDishes.forEach((d) => { if (d._restaurant) dishCount[d._restaurant.id] = (dishCount[d._restaurant.id] || 0) + 1; });
-    const byDish = allRestaurants.filter((r) => dishCount[r.id] && !byName.includes(r));
+    const byDish = allRestaurants.filter((r) => hasSelectedCategory(r) && dishCount[r.id] && !byName.includes(r));
     return [...byName, ...byDish].map((r) => ({ r, matches: dishCount[r.id] || 0 }));
-  }, [q, restaurants, remoteRestaurants, searchDishes]);
+  }, [q, restaurants, remoteRestaurants, searchDishes, dishes, categoryMatcher]);
 
   const openRestaurant = (restaurant) => navigation.navigate('Restaurant', { restaurant });
   const openDish = (item) => navigation.navigate('ItemDetail', { item, restaurant: item._restaurant });
-  const openMenuDestination = (screen) => {
-    setMenuOpen(false);
-    if (screen === 'restaurants') {
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: nearbyY, animated: true }));
-    } else {
-      navigation.navigate('Main', { screen });
-    }
-  };
+  const openAllRestaurants = () => navigation.navigate('RestaurantList');
   const addDish = (item) => {
     if ((item.option_groups || []).some((group) => group.is_required)) return openDish(item);
     const price = Number(item.price) || 0;
@@ -323,20 +239,32 @@ export default function HomeScreen({ navigation }) {
     return addItem({ ...item, effective_price: promo > 0 && promo < price ? promo : price }, 1, item._restaurant);
   };
 
-  const comboDishes = useMemo(() => {
-    const matcher = FOOD_CATEGORIES.find((c) => c.id === activeCat)?.matcher;
-    return dishes.filter((d) => d.is_available !== false && (!matcher || matcher.test(dishTypeText(d))))
-      .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || item.published_at || '') || 0 }))
-      .sort((a, b) => b.date - a.date || a.index - b.index)
-      .map(({ item }) => item);
-  }, [dishes, activeCat]);
-
   const recentDishes = useMemo(() => dishes
     .filter((item) => item.id && item.is_available !== false)
     .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || item.published_at || '') || 0 }))
     .sort((a, b) => b.date - a.date || a.index - b.index)
-    .slice(0, 5)
+    .slice(0, 3)
     .map(({ item }) => item), [dishes]);
+
+  const recentRestaurants = useMemo(() => {
+    const latestMenuDate = new Map();
+    dishes.forEach((dish) => {
+      const restaurantId = dish._restaurant?.id;
+      if (!restaurantId) return;
+      const date = Date.parse(dish.created_at || dish.createdAt || dish.published_at || dish.updated_at || '') || 0;
+      latestMenuDate.set(restaurantId, Math.max(latestMenuDate.get(restaurantId) || 0, date));
+    });
+    return restaurants
+      .filter((restaurant) => latestMenuDate.has(restaurant.id))
+      .filter((restaurant) => !categoryMatcher || dishes.some((dish) => dish._restaurant?.id === restaurant.id && categoryMatcher.test(dishTypeText(dish))))
+      .map((restaurant) => ({ restaurant, date: latestMenuDate.get(restaurant.id) || Date.parse(restaurant.updated_at || '') || 0 }))
+      .sort((a, b) => b.date - a.date || Number(b.restaurant.id) - Number(a.restaurant.id))
+      .slice(0, 3)
+      .map(({ restaurant }) => restaurant);
+  }, [restaurants, dishes, categoryMatcher]);
+
+  const promoDish = useMemo(() => dishes.find((dish) => dish.is_available !== false && Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [dishes]);
+  const promoPercent = promoDish ? Math.round((1 - Number(promoDish.discount_price) / Number(promoDish.price)) * 100) : 0;
 
   useDerivedValue(() => {
     scrollTo(bannerRef, bannerOffset.value, 0, false);
@@ -352,7 +280,7 @@ export default function HomeScreen({ navigation }) {
   }, [recentDishes, bannerOffset]);
 
   useEffect(() => {
-    if (!isFocused || recentDishes.length < 2 || q) return undefined;
+    if (!isFocused || recentDishes.length < 2 || q || hasMore || loadingMore) return undefined;
     const timer = setInterval(() => {
       if (bannerDraggingRef.current) return;
       const next = bannerIndexRef.current + 1;
@@ -373,370 +301,214 @@ export default function HomeScreen({ navigation }) {
       bannerAutoRef.current = false;
       cancelAnimation(bannerOffset);
     };
-  }, [isFocused, recentDishes.length, q, bannerOffset]);
+  }, [isFocused, recentDishes.length, q, hasMore, loadingMore, bannerOffset]);
+
+  const showSearch = q.length > 0;
+  const heroSlides = recentDishes.length > 1 ? [...recentDishes, recentDishes[0]] : recentDishes;
+  const toggleRestaurantFavorite = async (restaurant) => {
+    const ok = await toggleFavorite('restaurant', restaurant);
+    if (!ok) navigation.navigate('Auth', { screen: 'Login' });
+  };
+  const shareApp = () => Share.share({ message: 'Découvrez Estuaire Eat et ses restaurants !' });
 
   if (loading) return <Screen><LoadingView label="Chargement des restaurants…" /></Screen>;
 
   return (
-    <Screen>
+    <Screen edges={[]} bg="#FFF8F3" statusBar={showSearch ? 'dark-content' : 'light-content'}>
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: tabSpace + (totalItems > 0 ? 70 : 0) }}
-        onScroll={onScroll}
-        scrollEventThrottle={200}
+        contentContainerStyle={{ paddingBottom: tabSpace + 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={COLORS.primary} />}
       >
-        {/* ── En-tête ── */}
-        <View style={styles.header}>
-          <IconButton icon="menu" size={42} color={COLORS.text} onPress={() => setMenuOpen(true)} />
-          <View style={styles.brand}><View style={styles.brandSeal}><Text style={styles.brandSealE}>e</Text><Text style={styles.brandSealName}>ESTUAIRE</Text><Text style={styles.brandSealEat}>EAT</Text></View><View><Text style={styles.brandTop}>ESTUAIRE</Text><Text style={styles.brandMain}>EAT_</Text><Text style={styles.brandSub}>Bon goût, toujours !</Text></View></View>
-          <View style={styles.headerRight}>
-            <IconButton icon="notifications-outline" size={42} badge={0} onPress={() => (user ? navigation.navigate('Notifications') : navigation.navigate('Auth', { screen: 'Login' }))} />
-            <IconButton icon="bag-handle-outline" size={42} badge={totalItems} onPress={() => navigation.navigate('Main', { screen: 'Panier' })} />
+        <View style={[styles.hero, { height: showSearch ? insets.top + 90 : insets.top + 285 }]}>
+          {!showSearch && (heroSlides.length ? (
+            <Animated.ScrollView
+              ref={bannerRef}
+              horizontal
+              pagingEnabled
+              scrollEnabled={recentDishes.length > 1}
+              showsHorizontalScrollIndicator={false}
+              onScrollBeginDrag={() => { bannerDraggingRef.current = true; bannerAutoRef.current = false; cancelAnimation(bannerOffset); }}
+              onScrollEndDrag={() => { bannerDraggingRef.current = false; }}
+              onMomentumScrollEnd={(event) => {
+                if (bannerAutoRef.current) return;
+                const pageNumber = Math.min(recentDishes.length, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / BANNER_WIDTH)));
+                const index = pageNumber % recentDishes.length;
+                bannerOffset.value = index * BANNER_WIDTH;
+                bannerIndexRef.current = index;
+                setBannerIndex(index);
+              }}
+            >
+              {heroSlides.map((item, slideIndex) => (
+                <TouchableOpacity key={`${item._restaurant?.id}-${item.id}-${slideIndex}`} style={[styles.heroSlide, { height: insets.top + 285 }]} activeOpacity={0.96} onPress={() => openDish(item)}>
+                  <SmartImage uri={item.image} fallbackSource={HERO_IMAGE} style={StyleSheet.absoluteFill} />
+                  <LinearGradient colors={['rgba(0,0,0,0.89)', 'rgba(0,0,0,0.58)', 'rgba(0,0,0,0.04)']} start={{ x: 0, y: 0.6 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.54)']} style={StyleSheet.absoluteFill} />
+                  <View style={[styles.heroCopy, { top: insets.top + 130 }]}>
+                    <Text style={styles.heroEyebrow}>DÉCOUVREZ NOS NOUVEAUTÉS</Text>
+                    <Text style={styles.heroDishName} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.heroRestaurant} numberOfLines={1}>Chez {item._restaurant?.name || 'Estuaire Eat'}</Text>
+                    <View style={styles.heroCta}><Text style={styles.heroCtaText}>Voir le plat</Text><View style={styles.heroCtaIcon}><Ionicons name="arrow-forward" size={15} color={COLORS.primary} /></View></View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </Animated.ScrollView>
+          ) : (
+            <View style={[styles.heroSlide, { height: insets.top + 285 }]}>
+              <Image source={HERO_IMAGE} style={styles.fillImage} resizeMode="cover" />
+              <LinearGradient colors={['rgba(0,0,0,0.8)', 'transparent']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+              <View style={[styles.heroCopy, { top: insets.top + 145 }]}><Text style={styles.heroDishName}>Le vrai goût</Text><Text style={styles.heroRestaurant}>de la bonne cuisine !</Text></View>
+            </View>
+          ))}
+          <View pointerEvents="box-none" style={[styles.heroTop, { top: insets.top + 8 }]}>
+            <TouchableOpacity style={styles.locationTouch} onPress={() => setSheetOpen(true)} accessibilityLabel="Choisir une adresse de livraison">
+              <Ionicons name="location" color="#FFC400" size={13} /><Text style={styles.locationText} numberOfLines={1}>{displayLabel || 'Douala'}</Text><Ionicons name="chevron-down" color="#fff" size={11} />
+            </TouchableOpacity>
+            <View style={styles.heroActions}>
+              <IconButton icon="notifications-outline" size={39} onPress={() => (user ? navigation.navigate('Notifications') : navigation.navigate('Auth', { screen: 'Login' }))} />
+              <IconButton icon="share-social-outline" size={39} onPress={shareApp} />
+            </View>
           </View>
+          <TouchableOpacity style={[styles.brandBlock, { top: insets.top + 49 }]} onPress={openAllRestaurants} accessibilityLabel="Voir les restaurants Estuaire Eat">
+            <View style={styles.brandIcon}>
+              <MaterialCommunityIcons name="chef-hat" size={29} color="#fff" style={{ position: 'absolute', top: 7 }} />
+              <MaterialCommunityIcons name="silverware-fork-knife" size={27} color="#FF8A00" style={{ position: 'absolute', bottom: 7 }} />
+            </View>
+            <View><Text style={styles.brandName}>ESTUAIRE</Text><Text style={styles.brandEat}>EAT_</Text><Text style={styles.brandTagline}>Bon goût, toujours !</Text></View>
+          </TouchableOpacity>
+          {!showSearch && recentDishes.length > 1 && <View pointerEvents="none" style={styles.heroDots}>{recentDishes.map((item, index) => <View key={`${item._restaurant?.id}-${item.id}`} style={[styles.heroDot, index === bannerIndex && styles.heroDotActive]} />)}</View>}
         </View>
 
-        {/* ── Recherche ── */}
-        <View style={styles.homeSearchRow}>
-          <SearchBar
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Rechercher un plat ou un restaurant..."
-            style={styles.homeSearchInput}
-          />
-          <TouchableOpacity accessibilityLabel="Filtrer les plats" style={styles.searchFilterButton} onPress={() => scrollRef.current?.scrollTo({ y: categoryYRef.current, animated: true })}>
-            <Ionicons name="options-outline" size={21} color={COLORS.text} />
+        <View style={styles.searchRow}>
+          <SearchBar value={search} onChangeText={setSearch} placeholder="Rechercher un plat ou un restaurant..." style={styles.searchInput} />
+          <TouchableOpacity style={styles.filterButton} onPress={() => scrollRef.current?.scrollTo({ y: categoryYRef.current, animated: true })} accessibilityLabel="Voir les catégories">
+            <Ionicons name="options-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {q ? (
-          // ── Résultats de recherche ──
-          <View style={{ marginTop: 8 }}>
-            <View onLayout={(e) => { categoryYRef.current = e.nativeEvent.layout.y; }}>
+        {showSearch ? (
+          <View style={styles.results}>
+            <View onLayout={(event) => { categoryYRef.current = event.nativeEvent.layout.y; }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-                {FOOD_CATEGORIES.map((c) => <CategoryItem key={c.id} category={c} active={(activeCat || 'all') === c.id} onPress={() => selectCategory(c.id)} />)}
+                {FOOD_CATEGORIES.map((category) => <CategoryItem key={category.id} category={category} active={(activeCat || 'all') === category.id} onPress={() => selectCategory(category.id)} />)}
               </ScrollView>
             </View>
             {(remoteSearching || loadingMore) && <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 12 }} />}
-            {searchRestaurants.length > 0 && (
-              <>
-                <SectionHeader title={`Restaurants (${searchRestaurants.length})`} />
-                <View style={styles.listPad}>
-                  {searchRestaurants.map(({ r, matches }) => (
-                    <View key={`r${r.id}`}>
-                      <NearbyRow restaurant={r} onPress={() => openRestaurant(r)} />
-                      {matches > 0 && (
-                        <Text style={styles.matchHint}>
-                          {matches} plat{matches > 1 ? 's' : ''} correspondant à « {search.trim()} »
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
-            {searchDishes.length > 0 && (
-              <>
-                <SectionHeader title={`Plats (${searchDishes.length})`} style={{ marginTop: 12 }} />
-                <View style={styles.listPad}>
-                  {searchDishes.map((d, i) => <DishRow key={`d${d.id}-${i}`} item={d} onPress={() => openDish(d)} onAdd={() => addDish(d)} />)}
-                </View>
-              </>
-            )}
-            {!remoteSearching && !loadingMore && (q.length < 2 || !hasMore) && searchRestaurants.length === 0 && searchDishes.length === 0 && (
-              <EmptyState
-                icon="search"
-                title="Aucun résultat"
-                message={`Rien ne correspond à « ${search.trim()} ». Essayez un autre mot.`}
-                actionLabel="Effacer la recherche"
-                onAction={() => setSearch('')}
-              />
-            )}
+            {searchRestaurants.length > 0 && <><SectionHeader title={`Restaurants (${searchRestaurants.length})`} /><View style={styles.listPad}>{searchRestaurants.map(({ r, matches }) => <View key={`r${r.id}`}><NearbyRow restaurant={r} onPress={() => openRestaurant(r)} />{matches > 0 && <Text style={styles.matchHint}>{matches} plat{matches > 1 ? 's' : ''} correspondant à « {search.trim()} »</Text>}</View>)}</View></>}
+            {searchDishes.length > 0 && <><SectionHeader title={`Plats (${searchDishes.length})`} style={{ marginTop: 12 }} /><View style={styles.listPad}>{searchDishes.map((dish, index) => <DishRow key={`d${dish.id}-${index}`} item={dish} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View></>}
+            {!remoteSearching && !loadingMore && (q.length < 2 || !hasMore) && searchRestaurants.length === 0 && searchDishes.length === 0 && <EmptyState icon="search" title="Aucun résultat" message={`Rien ne correspond à « ${search.trim()} ». Essayez un autre mot.`} actionLabel="Effacer la recherche" onAction={() => setSearch('')} />}
           </View>
         ) : (
           <>
-            {/* ── Bannière ── */}
-            <View style={styles.banner}>
-              {recentDishes.length > 0 ? (
-                <>
-                  <Animated.ScrollView
-                    ref={bannerRef}
-                    horizontal
-                    pagingEnabled
-                    scrollEnabled={recentDishes.length > 1}
-                    showsHorizontalScrollIndicator={false}
-                    onScrollBeginDrag={() => { bannerDraggingRef.current = true; bannerAutoRef.current = false; cancelAnimation(bannerOffset); }}
-                    onScrollEndDrag={() => { bannerDraggingRef.current = false; }}
-                    onMomentumScrollEnd={(event) => {
-                      if (bannerAutoRef.current) return;
-                      const page = Math.min(recentDishes.length, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / BANNER_WIDTH)));
-                      const index = page % recentDishes.length;
-                      bannerOffset.value = index * BANNER_WIDTH;
-                      bannerIndexRef.current = index;
-                      setBannerIndex(index);
-                    }}
-                  >
-                    {(recentDishes.length > 1 ? [...recentDishes, recentDishes[0]] : recentDishes).map((item, slideIndex) => (
-                      <TouchableOpacity key={`${item._restaurant?.id}-${item.id}-${slideIndex}`} style={styles.bannerSlide} activeOpacity={0.95} onPress={() => openDish(item)}>
-                        <SmartImage uri={item.image} source={item.image ? null : CAMPAIGN} style={StyleSheet.absoluteFill} iconSize={1} />
-                        <LinearGradient colors={['rgba(0,0,0,0.96)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.04)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
-                        <View style={styles.bannerContent}>
-                          <View style={styles.bannerTag}><Text style={styles.bannerTagText}>À DÉCOUVRIR</Text></View>
-                          <Text style={styles.bannerTitle} numberOfLines={2}>{item.name}</Text>
-                          <Text style={styles.bannerSub} numberOfLines={2}>{item.description || item._restaurant?.name || 'Découvrez ce plat'}</Text>
-                          <Text style={styles.bannerPrice}>{formatPrice(item.discount_price && Number(item.discount_price) < Number(item.price) ? item.discount_price : item.price)}</Text>
-                          <View style={styles.bannerCta}><Text style={styles.bannerCtaText}>Voir le plat</Text><Ionicons name="arrow-forward-circle" size={20} color={COLORS.white} /></View>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </Animated.ScrollView>
-                  {recentDishes.length > 1 && <View pointerEvents="none" style={styles.bannerDots}>{recentDishes.map((item, index) => <View key={`${item._restaurant?.id}-${item.id}`} style={[styles.bannerDot, index === bannerIndex && styles.bannerDotActive]} />)}</View>}
-                </>
-              ) : (
-                <View style={styles.bannerSlide}>
-                  <Image source={CAMPAIGN} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                  <View style={styles.bannerContent}><Text style={styles.bannerTitle}>ESTUAIRE EAT_</Text><Text style={styles.bannerSub}>Le menu sera bientôt disponible.</Text></View>
-                </View>
-              )}
-            </View>
-
-            {/* ── Catégories ── */}
-            <View onLayout={(e) => { categoryYRef.current = e.nativeEvent.layout.y; }}>
+            <View onLayout={(event) => { categoryYRef.current = event.nativeEvent.layout.y; }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-                {FOOD_CATEGORIES.map((c) => (
-                  <CategoryItem key={c.id} category={c} active={(activeCat || 'all') === c.id} onPress={() => selectCategory(c.id)} />
-                ))}
+                {FOOD_CATEGORIES.map((category) => <CategoryItem key={category.id} category={category} active={(activeCat || 'all') === category.id} onPress={() => selectCategory(category.id)} />)}
               </ScrollView>
             </View>
 
-            {activeRestaurants.length > 0 && (
-              <View style={styles.activeSection}>
-                <SectionHeader title="Restaurants actifs" onAction={() => scrollRef.current?.scrollTo({ y: nearbyY, animated: true })} />
+            <TouchableOpacity style={styles.promoBanner} onPress={() => promoDish ? openDish(promoDish) : openAllRestaurants()} activeOpacity={0.9}>
+              <LinearGradient colors={['#1D0D09', '#5E1904', '#FF7100']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+              <Image source={PROMO_GIFT} style={styles.promoGift} resizeMode="contain" />
+              <View style={styles.promoCopy}><Text style={styles.promoLead}>{promoDish ? 'Profitez de' : 'Découvrez nos'}</Text><Text style={styles.promoBig}>{promoDish ? `−${promoPercent}%` : 'saveurs'}</Text><Text style={styles.promoSmall}>{promoDish ? `sur ${promoDish.name}` : 'Préparées pour vous'}</Text></View>
+              <View style={styles.promoAction}><Text style={styles.promoActionText}>Commander</Text><Ionicons name="arrow-forward" color="#111" size={14} /></View>
+            </TouchableOpacity>
+
+            <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>Restaurants récents</Text><TouchableOpacity onPress={openAllRestaurants} style={styles.seeAll}><Text style={styles.seeAllText}>Voir tout</Text><Ionicons name="chevron-forward" size={17} color={COLORS.primary} /></TouchableOpacity></View>
+            {recentRestaurants.length > 0 ? (
+              <>
                 <FlatList
-                  data={activeRestaurants}
+                  data={recentRestaurants}
                   horizontal
-                  keyExtractor={(r) => `active-${r.id}`}
+                  pagingEnabled
+                  keyExtractor={(restaurant) => `recent-${restaurant.id}`}
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: SCREEN_PADDING, gap: 12, paddingBottom: 8 }}
-                  renderItem={({ item }) => <PopularCard restaurant={item} onPress={() => openRestaurant(item)} liked={isFavorite('restaurant', item.id)} onLike={async () => { const ok = await toggleFavorite('restaurant', item); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} />}
+                  onMomentumScrollEnd={(event) => setFeatureIndex(Math.round(event.nativeEvent.contentOffset.x / width))}
+                  renderItem={({ item }) => <View style={styles.featurePage}><RestaurantFeatureCard restaurant={item} onPress={() => openRestaurant(item)} liked={isFavorite('restaurant', item.id)} onLike={() => toggleRestaurantFavorite(item)} /></View>}
                 />
-              </View>
-            )}
+                {recentRestaurants.length > 1 && <View style={styles.featureDots}>{recentRestaurants.map((restaurant, index) => <View key={restaurant.id} style={[styles.featureDot, featureIndex === index && styles.featureDotActive]} />)}</View>}
+              </>
+            ) : loadingMore || hasMore ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>{activeCat ? 'Aucun restaurant ne propose encore cette catégorie.' : 'Les nouveaux menus apparaîtront ici bientôt.'}</Text>}
 
-            <View style={styles.comboSection}>
-              <View style={styles.comboHeader}><View style={styles.comboMark} /><Text style={styles.comboHeading}>{activeCat ? FOOD_CATEGORIES.find((c) => c.id === activeCat)?.name || 'Plats' : 'Nouveaux plats'}</Text>{comboDishes.length > 3 && <TouchableOpacity onPress={() => setShowAllDishes((value) => !value)}><Text style={styles.comboSeeAll}>{showAllDishes ? 'Voir moins ↑' : 'Voir tout  →'}</Text></TouchableOpacity>}</View>
-              {comboDishes.length > 0 ? showAllDishes ? <View style={styles.listPad}>
-                {comboDishes.map((item, index) => <DishRow key={`all-${item._restaurant?.id}-${item.id}-${index}`} item={item} onPress={() => openDish(item)} onAdd={() => addDish(item)} />)}
-                {loadingMore && <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 10 }} />}
-              </View> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboRow}>
-                {comboDishes.slice(0, 12).map((item, index) => <ComboCard key={`${item._restaurant?.id}-${item.id}-${index}`} item={item} index={index} onPress={() => openDish(item)} onAdd={() => addDish(item)} liked={isFavorite('item', item.id)} onLike={async () => { const ok = await toggleFavorite('item', item); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} />)}
-              </ScrollView> : <Text style={styles.comboEmpty}>{activeCat ? `Aucun plat dans « ${FOOD_CATEGORIES.find((c) => c.id === activeCat)?.name || 'cette catégorie'} » pour le moment.` : 'Les plats apparaîtront dès que le menu sera disponible.'}</Text>}
-            </View>
-
-            {error && (
-              <EmptyState
-                icon="cloud-offline-outline"
-                title="Connexion impossible"
-                message="Vérifiez votre connexion internet puis réessayez."
-                actionLabel="Réessayer"
-                onAction={() => { setLoading(true); loadData(); }}
-              />
-            )}
-
-            {/* ── Près de vous / tous les restaurants ── */}
-            <View style={{ marginTop: 20 }} onLayout={(e) => setNearbyY(e.nativeEvent.layout.y)}>
-              <SectionHeader
-                title={location?.latitude ? 'Près de vous' : 'Tous les restaurants'}
-                icon={location?.latitude ? 'location' : undefined}
-                actionLabel={location?.latitude ? 'Changer' : 'Me localiser'}
-                onAction={() => setSheetOpen(true)}
-              />
-              <View style={styles.listPad}>
-                {nearby.map(({ r, km }) => <NearbyRow key={`n${r.id}`} restaurant={r} km={km} onPress={() => openRestaurant(r)} />)}
-                {loadingMore && <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 16 }} />}
-                {!error && nearby.length === 0 && (
-                  <EmptyState
-                    icon="storefront-outline"
-                    title="Aucun restaurant pour le moment"
-                    message="Revenez un peu plus tard."
-                  />
-                )}
-              </View>
-            </View>
+            <TouchableOpacity style={styles.clocheBanner} onPress={openAllRestaurants} activeOpacity={0.9}>
+              <Image source={CLOCHE_IMAGE} style={styles.fillImage} resizeMode="cover" />
+              <LinearGradient colors={['rgba(0,0,0,0.76)', 'rgba(0,0,0,0.2)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+              <Text style={styles.clocheText}>Commande facile,{"\n"}<Text style={styles.clocheAccent}>rapide et savoureuse !</Text></Text>
+              <View style={styles.clocheAction}><Text style={styles.clocheActionText}>Commander</Text><Ionicons name="arrow-forward" size={15} color={COLORS.primary} /></View>
+            </TouchableOpacity>
+            {error && <EmptyState icon="cloud-offline-outline" title="Connexion impossible" message="Vérifiez votre connexion internet puis réessayez." actionLabel="Réessayer" onAction={() => { setLoading(true); loadData(); }} />}
           </>
         )}
       </ScrollView>
-
-      {/* ── Panier flottant ── */}
-      {totalItems > 0 && (
-        <TouchableOpacity
-          style={[styles.floatingCart, { bottom: tabSpace - 12 }]}
-          onPress={() => navigation.navigate('Main', { screen: 'Panier' })}
-          activeOpacity={0.9}
-        >
-          <View style={styles.floatingCartIcon}><Ionicons name="bag-handle" size={18} color={COLORS.primary} /></View>
-          <Text style={styles.floatingCartText}>Voir le panier</Text>
-          <View style={styles.floatingCartCount}><Text style={styles.floatingCartCountText}>{totalItems}</Text></View>
-        </TouchableOpacity>
-      )}
-
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
-        <View style={styles.menuModal}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} accessibilityLabel="Fermer le menu" />
-          <View style={styles.menuPanel}>
-            <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>ESTUAIRE EAT</Text>
-              <IconButton icon="close" size={34} onPress={() => setMenuOpen(false)} />
-            </View>
-            {[
-              ['restaurant-outline', 'Restaurants', 'restaurants'],
-              ['basket-outline', 'Marché', 'Marché'],
-              ['cart-outline', 'Panier', 'Panier'],
-              ['receipt-outline', 'Commandes', 'Commandes'],
-              ['person-outline', 'Profil', 'Profil'],
-            ].map(([icon, label, destination]) => (
-              <TouchableOpacity key={label} style={styles.menuLink} onPress={() => openMenuDestination(destination)}>
-                <Ionicons name={icon} size={20} color={COLORS.primary} />
-                <Text style={styles.menuLinkText}>{label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
       <DeliveryLocationSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} navigation={navigation} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  menuModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.42)', justifyContent: 'flex-start' },
-  menuPanel: { width: '78%', maxWidth: 320, height: '100%', backgroundColor: '#FFF9F6', paddingTop: 48, paddingHorizontal: 18, ...SHADOWS.md },
-  menuHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 22 },
-  menuTitle: { fontFamily: FONTS.extrabold, fontSize: 18, color: COLORS.primary },
-  menuLink: { height: 51, flexDirection: 'row', alignItems: 'center', gap: 13, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
-  menuLinkText: { flex: 1, fontFamily: FONTS.semibold, fontSize: 14, color: COLORS.text },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SCREEN_PADDING, paddingTop: 5, height: 68, gap: 6, backgroundColor: '#FFF4EB' },
-  brand: { flex: 1, marginLeft: 3, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  brandSeal: { width: 45, height: 45, borderRadius: 23, borderWidth: 2, borderColor: '#B41818', backgroundColor: '#C61E16', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  brandSealE: { position: 'absolute', top: -6, fontFamily: FONTS.extrabold, fontSize: 28, color: '#FFD44D' },
-  brandSealName: { position: 'absolute', top: 19, backgroundColor: '#fff', color: '#B41818', fontFamily: FONTS.extrabold, fontSize: 6, width: 46, textAlign: 'center' },
-  brandSealEat: { position: 'absolute', bottom: 1, color: '#FFD44D', fontFamily: FONTS.extrabold, fontSize: 8 },
-  brandTop: { fontFamily: FONTS.extrabold, fontSize: 11, lineHeight: 13, color: '#161616', fontStyle: 'italic' },
-  brandMain: { fontFamily: FONTS.extrabold, fontSize: 22, lineHeight: 23, color: COLORS.primary, fontStyle: 'italic' },
-  brandSub: { fontFamily: FONTS.semibold, fontSize: 7, color: '#181818', fontStyle: 'italic' },
-  helloRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  wave: { transform: [{ rotate: '-20deg' }] },
-  hello: { fontFamily: FONTS.medium, fontSize: 15, color: COLORS.text },
-  heroTitle: { fontFamily: FONTS.bold, fontSize: 26, lineHeight: 33, color: COLORS.text, marginTop: 6, paddingHorizontal: SCREEN_PADDING },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  homeSearchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SCREEN_PADDING, marginTop: 7, marginBottom: 9 },
-  homeSearchInput: { flex: 1, height: 43, borderWidth: 0, paddingRight: 12 },
-  searchFilterButton: { width: 43, height: 43, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm },
-  locationPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.pill,
-    paddingHorizontal: 12, paddingVertical: 7, ...SHADOWS.sm,
-  },
-  locationHint: { fontFamily: FONTS.regular, fontSize: 10, color: COLORS.textMuted, lineHeight: 13 },
-  locationValue: { fontFamily: FONTS.semibold, fontSize: 13, color: COLORS.text, lineHeight: 17 },
-
-  catRow: { paddingHorizontal: SCREEN_PADDING, gap: 9, paddingTop: 12, paddingBottom: 8 },
-  catItem: { alignItems: 'center', width: 61 },
-  catCircle: {
-    width: 54, height: 54, borderRadius: 27, backgroundColor: COLORS.white,
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 2, borderColor: 'transparent',
-  },
-  catCircleActive: { borderColor: COLORS.primary, backgroundColor: COLORS.white },
-  catImage: { width: '100%', height: '100%' },
-  catImageAll: { position: 'absolute', width: 58, height: 58, left: -2, top: -5 },
-  catLabel: { fontFamily: FONTS.semibold, fontSize: 9, color: COLORS.text, marginTop: 4, textAlign: 'center' },
-
-  banner: {
-    marginHorizontal: SCREEN_PADDING, marginTop: 4, height: 166, borderRadius: RADIUS.xl,
-    overflow: 'hidden', backgroundColor: COLORS.dark, ...SHADOWS.md,
-  },
-  bannerSlide: { width: BANNER_WIDTH, height: 166 },
-  bannerContent: { flex: 1, padding: 14, justifyContent: 'center', maxWidth: '63%' },
-  bannerTag: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 3,
-  },
-  bannerTagText: { fontFamily: FONTS.bold, fontSize: 9, color: COLORS.white },
-  bannerTitle: { fontFamily: FONTS.extrabold, fontSize: 19, lineHeight: 23, color: COLORS.white, marginTop: 6, fontStyle: 'italic' },
-  bannerSub: { fontFamily: FONTS.medium, fontSize: 10, lineHeight: 14, color: '#fff', marginTop: 2 },
-  bannerPrice: { fontFamily: FONTS.bold, fontSize: 13, color: '#fff', marginTop: 5 },
-  bannerCta: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingHorizontal: 9, paddingVertical: 5, marginTop: 7,
-  },
-  bannerCtaText: { fontFamily: FONTS.semibold, fontSize: 9, color: COLORS.white },
-  bannerDots: { position: 'absolute', bottom: 8, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },
-  bannerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
-  bannerDotActive: { width: 13, backgroundColor: COLORS.primary },
-  activeSection: { marginTop: 4, marginBottom: 13 },
-  comboSection: { marginTop: 1 },
-  comboHeader: { marginHorizontal: SCREEN_PADDING, marginBottom: 9, flexDirection: 'row', alignItems: 'center' },
-  comboMark: { width: 4, height: 21, borderRadius: 2, backgroundColor: COLORS.primary, marginRight: 9 },
-  comboHeading: { flex: 1, fontFamily: FONTS.bold, fontSize: 18, color: '#111' },
-  comboSeeAll: { fontFamily: FONTS.semibold, fontSize: 11, color: COLORS.primary },
-  comboRow: { paddingHorizontal: SCREEN_PADDING, gap: 10, paddingBottom: 8 },
-  comboCard: { width: Math.max(104, (width - 60) / 3), borderRadius: 13, backgroundColor: '#fff', overflow: 'hidden', ...SHADOWS.sm },
-  comboImageWrap: { height: 91 },
-  comboImage: { width: '100%', height: '100%' },
-  comboBadge: { position: 'absolute', top: 6, left: 6, backgroundColor: COLORS.primary, color: '#fff', fontFamily: FONTS.bold, fontSize: 7, borderRadius: 10, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2 },
-  comboHeart: { position: 'absolute', top: 5, right: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  comboBody: { paddingHorizontal: 8, paddingBottom: 6 },
-  comboTitle: { fontFamily: FONTS.bold, fontSize: 11, color: '#111' },
-  comboSubtitle: { fontFamily: FONTS.regular, fontSize: 9, color: '#333' },
-  comboRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  comboRatingText: { fontFamily: FONTS.medium, fontSize: 9, color: '#555' },
-  comboBottom: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  comboPrice: { flex: 1, fontFamily: FONTS.bold, fontSize: 11, color: '#111' },
-  comboAdd: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  comboEmpty: { marginHorizontal: SCREEN_PADDING, marginBottom: 10, fontFamily: FONTS.regular, color: COLORS.textMuted, fontSize: 12 },
-  promoBanner: { marginHorizontal: SCREEN_PADDING, marginTop: 5, height: 100, borderRadius: 18, overflow: 'hidden', backgroundColor: '#111', flexDirection: 'row', alignItems: 'center' },
-  promoCopy: { flex: 1, marginLeft: 16 },
-  promoLead: { fontFamily: FONTS.semibold, fontStyle: 'italic', color: '#fff', fontSize: 13 },
-  promoBig: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: COLORS.primary, fontSize: 20, lineHeight: 24 },
-  promoSmall: { fontFamily: FONTS.medium, color: '#fff', fontSize: 8 },
-  promoAction: { marginRight: 8, marginTop: 38, borderRadius: 16, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, height: 29 },
-  promoActionText: { fontFamily: FONTS.bold, color: '#111', fontSize: 8 },
-
-  popCard: { width: POPULAR_CARD_W, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, ...SHADOWS.md },
-  popImage: { width: '100%', height: POPULAR_CARD_W * 0.64, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg },
-  popBody: { padding: 8 },
-  popName: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.text },
-  popCuisine: { fontFamily: FONTS.regular, fontSize: 10, color: COLORS.textMuted },
-  popMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
-  popHeart: {
-    position: 'absolute', top: 8, right: 8, zIndex: 2, width: 30, height: 30, borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center',
-  },
-  closedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
-  closedText: { fontFamily: FONTS.semibold, color: COLORS.white, fontSize: 13 },
-
+  fillImage: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
+  hero: { width, overflow: 'hidden', backgroundColor: '#160B08' },
+  heroSlide: { width },
+  heroTop: { position: 'absolute', left: 17, right: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  locationTouch: { flexDirection: 'row', alignItems: 'center', maxWidth: 170, gap: 3, paddingVertical: 6 },
+  locationText: { fontFamily: FONTS.semibold, color: '#fff', fontSize: 11 },
+  heroActions: { flexDirection: 'row', gap: 8 },
+  brandBlock: { position: 'absolute', left: 17, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandIcon: { width: 73, height: 67, borderRadius: 36, borderWidth: 2, borderColor: '#FF8C00', backgroundColor: '#100B08', alignItems: 'center', justifyContent: 'center' },
+  brandName: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#fff', fontSize: 20, lineHeight: 22 },
+  brandEat: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#FF7800', fontSize: 31, lineHeight: 31 },
+  brandTagline: { fontFamily: FONTS.semibold, fontStyle: 'italic', color: '#fff', fontSize: 11, lineHeight: 15 },
+  heroCopy: { position: 'absolute', left: 19, width: width * 0.59 },
+  heroEyebrow: { color: '#FFBB72', fontFamily: FONTS.bold, fontSize: 9, letterSpacing: 1 },
+  heroDishName: { color: '#fff', fontFamily: FONTS.extrabold, fontStyle: 'italic', fontSize: 25, lineHeight: 28, marginTop: 3 },
+  heroRestaurant: { color: '#fff', fontFamily: FONTS.medium, fontSize: 12, marginTop: 3 },
+  heroCta: { flexDirection: 'row', alignItems: 'center', gap: 9, alignSelf: 'flex-start', marginTop: 13, paddingLeft: 13, paddingRight: 5, height: 30, borderRadius: 18, backgroundColor: COLORS.primary },
+  heroCtaText: { color: '#fff', fontFamily: FONTS.semibold, fontSize: 10 },
+  heroCtaIcon: { width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  heroDots: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  heroDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.8)' },
+  heroDotActive: { backgroundColor: COLORS.primary, width: 13 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: -3, marginHorizontal: 14, marginBottom: 8 },
+  searchInput: { flex: 1, height: 42, borderRadius: 22, backgroundColor: '#fff', ...SHADOWS.sm },
+  filterButton: { width: 45, height: 45, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, ...SHADOWS.primary },
+  catRow: { paddingHorizontal: 12, gap: 6, paddingTop: 5, paddingBottom: 10 },
+  catItem: { width: Math.max(56, (width - 28 - 5 * 6) / 6) },
+  catTile: { height: 79, borderRadius: 14, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'flex-end', ...SHADOWS.sm },
+  catTileActive: { backgroundColor: COLORS.primary },
+  catImage: { position: 'absolute', width: '100%', height: 57, top: 0 },
+  catLabel: { fontFamily: FONTS.semibold, fontSize: 9, color: '#172034', textAlign: 'center', paddingBottom: 5 },
+  catLabelActive: { color: '#fff' },
+  promoBanner: { marginHorizontal: 12, marginTop: 3, height: 85, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', ...SHADOWS.sm },
+  promoGift: { width: 93, height: 87, marginLeft: -4 },
+  promoCopy: { flex: 1, marginLeft: 3 },
+  promoLead: { color: '#fff', fontFamily: FONTS.semibold, fontStyle: 'italic', fontSize: 12 },
+  promoBig: { color: '#FFB900', fontFamily: FONTS.extrabold, fontStyle: 'italic', fontSize: 26, lineHeight: 28 },
+  promoSmall: { color: '#fff', fontFamily: FONTS.medium, fontSize: 8 },
+  promoAction: { height: 31, backgroundColor: '#fff', borderRadius: 17, paddingHorizontal: 9, marginRight: 8, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  promoActionText: { fontFamily: FONTS.bold, fontSize: 9, color: '#111' },
+  sectionHeader: { marginHorizontal: 14, marginTop: 17, marginBottom: 9, flexDirection: 'row', alignItems: 'center' },
+  sectionMark: { width: 5, height: 20, borderRadius: 3, backgroundColor: COLORS.primary, marginRight: 8 },
+  sectionTitle: { flex: 1, fontFamily: FONTS.bold, fontSize: 16, color: '#131B31' },
+  seeAll: { flexDirection: 'row', alignItems: 'center', gap: 1 },
+  seeAllText: { fontFamily: FONTS.semibold, color: COLORS.primary, fontSize: 11 },
+  featurePage: { width, alignItems: 'center', paddingBottom: 4 },
+  featureDots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 3 },
+  featureDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D1C4BA' },
+  featureDotActive: { width: 14, backgroundColor: COLORS.primary },
+  featureLoading: { height: 158 },
+  emptyText: { marginHorizontal: 15, padding: 20, color: COLORS.textMuted, textAlign: 'center' },
+  clocheBanner: { marginHorizontal: 12, marginTop: 12, height: 80, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 17, ...SHADOWS.sm },
+  clocheText: { flex: 1, color: '#fff', fontFamily: FONTS.bold, fontStyle: 'italic', fontSize: 15, lineHeight: 19 },
+  clocheAccent: { color: '#FFCB31' },
+  clocheAction: { height: 31, borderRadius: 17, backgroundColor: '#fff', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  clocheActionText: { fontFamily: FONTS.bold, color: '#111', fontSize: 9 },
+  results: { paddingBottom: 20 },
   listPad: { paddingHorizontal: SCREEN_PADDING, gap: 12 },
-  nearCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10,
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, ...SHADOWS.sm,
-  },
+  nearCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, ...SHADOWS.sm },
   nearImage: { width: 84, height: 84, borderRadius: RADIUS.md },
+  popMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
   matchHint: { fontFamily: FONTS.medium, fontSize: 11, color: COLORS.primary, marginTop: 4, marginLeft: 6 },
   oldPrice: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.textLight, textDecorationLine: 'line-through' },
   addBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-
-  floatingCart: {
-    position: 'absolute', left: SCREEN_PADDING, right: SCREEN_PADDING,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: 12, paddingHorizontal: 14,
-    ...SHADOWS.primary,
-  },
-  floatingCartIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
-  floatingCartText: { flex: 1, fontFamily: FONTS.semibold, fontSize: 15, color: COLORS.white },
-  floatingCartCount: { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 3 },
-  floatingCartCountText: { fontFamily: FONTS.bold, fontSize: 14, color: COLORS.white },
 });
