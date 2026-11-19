@@ -11,7 +11,7 @@ export const IMAGES = {
   homeBanner: require('../../assets/images/banner-home.jpg'),
 
   // Illustration du chariot dans l'en-tête du panier (repli : icônes chariot + sac)
-  cartHeader: require('../../assets/images/cart-header.jpg'),
+  cartHeader: require('../../assets/images/cart-header-cutout.webp'),
 
   // Vignettes des catégories de l'accueil (clé = slug de la catégorie)
   categories: {

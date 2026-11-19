@@ -49,20 +49,16 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <AuthLayout
+      loginStyle
       title="Bon retour !"
       titleIcon="hand-left"
       subtitle="Connectez-vous pour retrouver vos restaurants préférés et commander vos plats facilement."
-      onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
       footer={(
         <View style={styles.footer}>
           <Text style={styles.footerText}>Pas encore de compte ?</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.footerLinkRow} hitSlop={8}>
             <Text style={styles.footerLink}>S'inscrire</Text>
             <Ionicons name="chevron-forward" size={15} color={COLORS.primary} />
-          </TouchableOpacity>
-          {/* Les visiteurs peuvent parcourir les restaurants et remplir leur panier sans compte */}
-          <TouchableOpacity onPress={goHome} style={styles.guest} hitSlop={8}>
-            <Text style={styles.guestText}>Continuer sans compte</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -71,6 +67,7 @@ export default function LoginScreen({ navigation }) {
 
       <View style={{ gap: 14 }}>
         <Input
+          compact
           icon="mail-outline"
           label="Adresse e-mail"
           value={email}
@@ -83,6 +80,7 @@ export default function LoginScreen({ navigation }) {
           autoComplete="email"
         />
         <Input
+          compact
           icon="lock-closed-outline"
           label="Mot de passe"
           value={password}
@@ -105,21 +103,20 @@ export default function LoginScreen({ navigation }) {
         <Ionicons name="chevron-forward" size={13} color={COLORS.primary} />
       </TouchableOpacity>
 
-      <Button title="Se connecter" iconRight="arrow-forward" onPress={handleLogin} loading={loading} />
+      <Button title="Se connecter" iconRight="arrow-forward" onPress={handleLogin} loading={loading} style={styles.loginButton} />
 
-      <OrDivider />
-      <SocialButtons social={social} />
+      <OrDivider loginStyle />
+      <SocialButtons social={social} loginStyle />
     </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  forgot: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 2, marginTop: 12, marginBottom: 20 },
-  forgotText: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.primary },
-  footer: { alignItems: 'center', marginTop: 28, gap: 4 },
-  footerText: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.textMuted },
+  forgot: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 2, marginTop: 9, marginBottom: 17 },
+  forgotText: { fontFamily: FONTS.medium, fontSize: 11, color: COLORS.primary },
+  loginButton: { borderRadius: 30 },
+  footer: { alignItems: 'center', marginTop: 25, gap: 3 },
+  footerText: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.textMuted },
   footerLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   footerLink: { fontFamily: FONTS.semibold, fontSize: 15, color: COLORS.primary },
-  guest: { marginTop: 14, paddingVertical: 4 },
-  guestText: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.textMuted, textDecorationLine: 'underline' },
 });

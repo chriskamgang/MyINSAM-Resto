@@ -119,26 +119,27 @@ export function Button({ title, onPress, variant = 'primary', icon, iconRight, l
 }
 
 // ── Champ de saisie avec pastille d'icône à gauche (style maquette connexion) ──
-export function Input({ label, icon, error, right, style, inputStyle, multiline, ...props }) {
+export function Input({ label, icon, error, right, style, inputStyle, multiline, compact = false, ...props }) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={style}>
       <View style={[
         styles.inputBox,
+        compact && styles.inputBoxCompact,
         multiline && { alignItems: 'flex-start', paddingVertical: 12 },
         focused && styles.inputFocused,
         error && styles.inputError,
       ]}>
         {icon ? (
-          <View style={styles.inputIcon}>
-            <Ionicons name={icon} size={18} color={COLORS.primary} />
+          <View style={[styles.inputIcon, compact && styles.inputIconCompact]}>
+            <Ionicons name={icon} size={compact ? 16 : 18} color={compact ? COLORS.text : COLORS.primary} />
           </View>
         ) : null}
         <View style={{ flex: 1 }}>
-          {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+          {label ? <Text style={[styles.inputLabel, compact && styles.inputLabelCompact]}>{label}</Text> : null}
           <TextInput
             placeholderTextColor={COLORS.textLight}
-            style={[styles.input, multiline && { minHeight: 70, textAlignVertical: 'top' }, inputStyle]}
+            style={[styles.input, compact && styles.inputCompact, multiline && { minHeight: 70, textAlignVertical: 'top' }, inputStyle]}
             onFocus={(e) => { setFocused(true); props.onFocus?.(e); }}
             onBlur={(e) => { setFocused(false); props.onBlur?.(e); }}
             multiline={multiline}
@@ -391,12 +392,16 @@ const styles = StyleSheet.create({
   },
   inputFocused: { borderColor: COLORS.primary, backgroundColor: COLORS.surface },
   inputError: { borderColor: COLORS.danger },
+  inputBoxCompact: { minHeight: 55, borderRadius: 14, gap: 11, paddingHorizontal: 9, backgroundColor: '#F9FAFB', borderColor: '#E7E8EA' },
   inputIcon: {
     width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.primarySoft,
     alignItems: 'center', justifyContent: 'center',
   },
+  inputIconCompact: { width: 32, height: 32, borderRadius: 12, backgroundColor: '#FFE9DC' },
   inputLabel: { fontFamily: FONTS.medium, fontSize: 12, color: COLORS.text, marginBottom: -2 },
+  inputLabelCompact: { fontSize: 10, marginBottom: -1 },
   input: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.text, paddingVertical: 4, paddingHorizontal: 0 },
+  inputCompact: { fontSize: 11, paddingVertical: 2 },
   inputErrorText: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.danger, marginTop: 4, marginLeft: 6 },
 
   search: {
