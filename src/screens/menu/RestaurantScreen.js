@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable,
-  RefreshControl, Dimensions, Modal, StatusBar, FlatList, Linking, Share,
+  RefreshControl, Dimensions, Modal, StatusBar, FlatList, Linking, Share, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,12 +13,15 @@ import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, format
 import { IconButton, SmartImage, EmptyState, LoadingView } from '../../components/ui';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
-const HERO_HEIGHT = 270;
+const HERO_HEIGHT = 205;
 const SHEET_OVERLAP = 34;
+const BOTTOM_NAV_HEIGHT = 66;
 const TOP_BAR_H = 56;
-const GRID_GAP = 12;
-const CARD_W = (width - SCREEN_PADDING * 2 - GRID_GAP) / 2;
+const GRID_GAP = 10;
+const CARD_SIDE = 14;
+const CARD_W = (width - CARD_SIDE * 2 - GRID_GAP) / 2;
 const POPULAR_LIMIT = 6;
+const PROMO_GIFT = require('../../../assets/images/restaurant-promo-gift.png');
 
 // ── Utilitaires ──
 const clean = (s) => (typeof s === 'string' ? s.trim().replace(/\s+/g, ' ') : s);
@@ -201,8 +204,8 @@ function CategoryTile({ label, icon, active, onPress }) {
       activeOpacity={0.85}
       style={[styles.tile, active ? styles.tileActive : styles.tileIdle]}
     >
-      <Ionicons name={icon} size={22} color={active ? COLORS.white : COLORS.text} />
-      <Text style={[styles.tileLabel, active && { color: COLORS.white }]} numberOfLines={1}>{label}</Text>
+      <Ionicons name={icon} size={20} color={active ? COLORS.white : COLORS.text} />
+      <Text style={[styles.tileLabel, label.length > 9 && styles.tileLabelLong, active && { color: COLORS.white }]} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -242,7 +245,7 @@ function DishCard({ item, liked, onLike, onPress, onAdd }) {
             {hasPromo ? <Text style={styles.oldPrice}>{formatPrice(price)}</Text> : null}
             <Text style={styles.dishPrice} numberOfLines={1}>{formatPrice(effective)}</Text>
           </View>
-          <AddButton onPress={() => onAdd(item)} disabled={unavailable} />
+          <AddButton onPress={() => onAdd(item)} disabled={unavailable} size={28} />
         </View>
       </View>
     </TouchableOpacity>
@@ -334,11 +337,12 @@ export default function RestaurantScreen({ route, navigation }) {
   if (activeFilter === 'promos') { gridItems = promoItems; sectionTitle = 'Promotions'; }
   else if (activeFilter === 'all') {
     gridItems = showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
-    sectionTitle = 'Nos plats populaires';
+    sectionTitle = allItems.some((item) => item.is_featured) ? 'Nos plats populaires' : 'Tous les plats';
   } else { gridItems = currentCategory.items; sectionTitle = labelize(currentCategory.name); }
   const canExpand = activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
 
-  const isOpen = restaurant.is_open == null ? true : !!restaurant.is_open;
+  const isOpen = !!restaurant.is_open;
+  const hasOpenStatus = restaurant.is_open != null;
   const photos = Array.isArray(restaurant.photos) ? restaurant.photos : [];
   const hours = useMemo(() => parseOpeningHours(restaurant.opening_hours), [restaurant.opening_hours]);
   const todayHours = hours.find(h => h.key === TODAY_KEY);
@@ -397,7 +401,7 @@ export default function RestaurantScreen({ route, navigation }) {
     : 0;
 
   const showCart = totalItems > 0;
-  const cartSpace = showCart ? 96 : 24;
+  const cartSpace = showCart ? BOTTOM_NAV_HEIGHT + 100 : BOTTOM_NAV_HEIGHT + 24;
 
   const renderMenu = () => {
     if (loading) return <View style={{ height: 240 }}><LoadingView label="Chargement du menu…" /></View>;
@@ -425,16 +429,16 @@ export default function RestaurantScreen({ route, navigation }) {
       <View style={[styles.menuSection, { minHeight: SCREEN_H - topBarH - 90 }]}>
         {/* Bannière promo : uniquement s'il existe de vraies réductions */}
         {promoItems.length > 0 && activeFilter !== 'promos' ? (
-          <LinearGradient colors={GRADIENTS.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.promo}>
-            <View style={styles.promoIcon}><Ionicons name="gift" size={30} color={COLORS.primary} /></View>
+          <LinearGradient colors={['#FFAE12', '#FF7907', '#FF5F06']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.promo}>
+            <Image source={PROMO_GIFT} style={styles.promoGift} resizeMode="contain" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.promoBig}>Jusqu'à -{maxPercent}%</Text>
+              <Text style={styles.promoBig}>-{maxPercent}%</Text>
               <Text style={styles.promoSub} numberOfLines={2}>
                 sur une sélection de {promoItems.length} plat{promoItems.length > 1 ? 's' : ''}
               </Text>
             </View>
             <TouchableOpacity style={styles.promoBtn} onPress={() => selectFilter('promos')} activeOpacity={0.85}>
-              <Text style={styles.promoBtnText}>Voir</Text>
+              <Text style={styles.promoBtnText}>Commander</Text>
               <Ionicons name="arrow-forward" size={15} color={COLORS.text} />
             </TouchableOpacity>
           </LinearGradient>
@@ -514,6 +518,7 @@ export default function RestaurantScreen({ route, navigation }) {
             <View style={styles.identity}>
               <View style={styles.logoWrap}>
                 <SmartImage uri={restaurant.logo} style={styles.logo} fallbackIcon="storefront-outline" iconSize={30} />
+                {restaurant.is_verified === true && <View style={styles.verified}><Ionicons name="checkmark" size={14} color={COLORS.white} /></View>}
               </View>
               <View style={styles.identityText}>
                 <View style={styles.nameRow}>
@@ -552,11 +557,11 @@ export default function RestaurantScreen({ route, navigation }) {
                 </View>
               </View>
               <View style={styles.stripDivider} />
-              <View style={[styles.openPill, { backgroundColor: isOpen ? COLORS.successSoft : COLORS.dangerSoft }]}>
+              <View style={[styles.openPill, { backgroundColor: !hasOpenStatus ? COLORS.surfaceAlt : isOpen ? COLORS.successSoft : COLORS.dangerSoft }]}>
                 <View style={styles.openRow}>
-                  <View style={[styles.openDot, { backgroundColor: isOpen ? COLORS.success : COLORS.danger }]} />
-                  <Text style={[styles.openText, { color: isOpen ? COLORS.success : COLORS.danger }]}>
-                    {isOpen ? 'Ouvert' : 'Fermé'}
+                  <View style={[styles.openDot, { backgroundColor: !hasOpenStatus ? COLORS.textMuted : isOpen ? COLORS.success : COLORS.danger }]} />
+                  <Text style={[styles.openText, { color: !hasOpenStatus ? COLORS.textMuted : isOpen ? COLORS.success : COLORS.danger }]}>
+                    {!hasOpenStatus ? 'Horaires' : isOpen ? 'Ouvert' : 'Fermé'}
                   </Text>
                 </View>
                 {isOpen && closeLabel ? <Text style={styles.openSub}>Jusqu'à {closeLabel}</Text> : null}
@@ -729,7 +734,7 @@ export default function RestaurantScreen({ route, navigation }) {
         pointerEvents="none"
         style={[
           styles.toast,
-          { bottom: insets.bottom + (showCart ? 92 : 24) },
+          { bottom: insets.bottom + BOTTOM_NAV_HEIGHT + (showCart ? 92 : 24) },
           {
             opacity: toast.anim,
             transform: [{ translateY: toast.anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
@@ -742,7 +747,7 @@ export default function RestaurantScreen({ route, navigation }) {
 
       {/* ── Barre panier ── */}
       {showCart ? (
-        <View style={[styles.cartBar, { bottom: insets.bottom + 12 }]}>
+        <View style={[styles.cartBar, { bottom: Math.max(insets.bottom, 8) + BOTTOM_NAV_HEIGHT + 6 }]}>
           <View style={styles.cartIconWrap}>
             <Ionicons name="cart-outline" size={26} color={COLORS.text} />
             <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{totalItems > 99 ? '99+' : totalItems}</Text></View>
@@ -760,12 +765,30 @@ export default function RestaurantScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       ) : null}
+
+      <View style={[styles.bottomNav, { height: BOTTOM_NAV_HEIGHT, bottom: Math.max(insets.bottom, 8) }]}>
+        {[
+          { route: 'Accueil', icon: 'home', label: 'Accueil' },
+          { route: 'Marché', icon: 'basket-outline', label: 'Marché' },
+          { route: 'Panier', icon: 'cart-outline', label: 'Panier', center: true },
+          { route: 'Commandes', icon: 'receipt-outline', label: 'Commandes' },
+          { route: 'Profil', icon: 'person-outline', label: 'Profil' },
+        ].map((tab) => (
+          <TouchableOpacity key={tab.route} style={styles.bottomNavItem} onPress={() => navigation.navigate('Main', { screen: tab.route })} activeOpacity={0.8}>
+            <View style={tab.center ? styles.bottomNavCenter : null}>
+              <Ionicons name={tab.icon} size={tab.center ? 28 : 22} color={tab.center ? COLORS.white : tab.route === 'Accueil' ? COLORS.primary : COLORS.text} />
+              {tab.center && totalItems > 0 && <View style={styles.bottomNavBadge}><Text style={styles.bottomNavBadgeText}>{totalItems > 9 ? '9+' : totalItems}</Text></View>}
+            </View>
+            <Text style={[styles.bottomNavLabel, tab.route === 'Accueil' && styles.bottomNavActive]} numberOfLines={1}>{tab.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: '#FFFDFC' },
 
   // ── Couverture ──
   hero: { width: '100%', height: HERO_HEIGHT },
@@ -795,14 +818,14 @@ const styles = StyleSheet.create({
   // ── Feuille / identité ──
   sheet: {
     marginTop: -SHEET_OVERLAP,
-    backgroundColor: COLORS.bg,
-    borderTopLeftRadius: 40, borderTopRightRadius: 40,
-    paddingHorizontal: SCREEN_PADDING, paddingBottom: 6,
+    backgroundColor: '#FFFDFC',
+    borderTopLeftRadius: 30, borderTopRightRadius: 30,
+    paddingHorizontal: SCREEN_PADDING, paddingBottom: 3,
   },
-  identity: { flexDirection: 'row', alignItems: 'flex-end', gap: 14 },
-  logoWrap: { marginTop: -54 },
+  identity: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+  logoWrap: { marginTop: -30 },
   logo: {
-    width: 100, height: 100, borderRadius: 50,
+    width: 88, height: 88, borderRadius: 44,
     borderWidth: 4, borderColor: COLORS.surface,
     ...SHADOWS.md,
   },
@@ -811,83 +834,81 @@ const styles = StyleSheet.create({
     width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: COLORS.surface,
   },
-  identityText: { flex: 1, paddingTop: 10 },
+  identityText: { flex: 1, paddingTop: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontFamily: FONTS.bold, fontSize: 22, lineHeight: 28, color: COLORS.text, flexShrink: 1 },
-  cuisine: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.textMuted, marginTop: 1 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  ratingValue: { fontFamily: FONTS.bold, fontSize: 15, color: COLORS.primary },
-  ratingCount: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.textMuted },
+  name: { fontFamily: FONTS.bold, fontSize: 20, lineHeight: 25, color: COLORS.text, flexShrink: 1 },
+  cuisine: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.textMuted, marginTop: 1 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  ratingValue: { fontFamily: FONTS.bold, fontSize: 14, color: COLORS.primary },
+  ratingCount: { fontFamily: FONTS.regular, fontSize: 12, color: COLORS.textMuted },
 
   strip: {
-    flexDirection: 'row', alignItems: 'center', marginTop: 14,
+    flexDirection: 'row', alignItems: 'center', marginTop: 10,
     backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
-    paddingVertical: 10, paddingHorizontal: 10, ...SHADOWS.md,
+    paddingVertical: 7, paddingHorizontal: 8, ...SHADOWS.sm,
   },
-  stripCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  stripCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 3 },
   stripText: { flex: 1 },
-  stripValue: { fontFamily: FONTS.semibold, fontSize: 13, lineHeight: 18, color: COLORS.text },
-  stripLabel: { fontFamily: FONTS.regular, fontSize: 10, lineHeight: 14, color: COLORS.textMuted },
-  stripDivider: { width: 1, height: 30, backgroundColor: COLORS.divider, marginHorizontal: 4 },
+  stripValue: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16, color: COLORS.text },
+  stripLabel: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 12, color: COLORS.textMuted },
+  stripDivider: { width: 1, height: 28, backgroundColor: COLORS.divider, marginHorizontal: 3 },
   openPill: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
-    borderRadius: RADIUS.md, paddingVertical: 6, paddingHorizontal: 6, marginLeft: 4,
+    borderRadius: RADIUS.md, paddingVertical: 5, paddingHorizontal: 4, marginLeft: 3,
   },
   openRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   openDot: { width: 7, height: 7, borderRadius: 4 },
-  openText: { fontFamily: FONTS.semibold, fontSize: 13, lineHeight: 18 },
-  openSub: { fontFamily: FONTS.regular, fontSize: 10, lineHeight: 14, color: COLORS.textMuted },
+  openText: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16 },
+  openSub: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 12, color: COLORS.textMuted },
 
   // ── Tuiles catégories ──
-  stickyWrap: { backgroundColor: COLORS.bg, zIndex: 2 },
-  tilesContent: { paddingHorizontal: SCREEN_PADDING, paddingVertical: 12, gap: 8 },
+  stickyWrap: { backgroundColor: '#FFFDFC', zIndex: 2 },
+  tilesContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 2 },
   tile: {
-    width: 70, height: 70, borderRadius: RADIUS.lg,
-    alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4,
+    width: 54, height: 48, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2,
   },
   tileIdle: { backgroundColor: COLORS.surface, ...SHADOWS.sm },
   tileActive: { backgroundColor: COLORS.primary, ...SHADOWS.primary },
-  tileLabel: { fontFamily: FONTS.medium, fontSize: 11, color: COLORS.text, textAlign: 'center' },
+  tileLabel: { fontFamily: FONTS.medium, fontSize: 9, color: COLORS.text, textAlign: 'center' },
+  tileLabelLong: { fontSize: 8 },
 
   // ── Menu ──
-  menuSection: { paddingHorizontal: SCREEN_PADDING, paddingTop: 4 },
+  menuSection: { paddingHorizontal: CARD_SIDE, paddingTop: 3 },
   promo: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderRadius: RADIUS.xl, padding: 14, marginBottom: 20, ...SHADOWS.primary,
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+    borderRadius: 17, paddingHorizontal: 9, height: 73, marginBottom: 11, ...SHADOWS.primary,
   },
-  promoIcon: {
-    width: 56, height: 56, borderRadius: 18, backgroundColor: COLORS.white,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  promoBig: { fontFamily: FONTS.extrabold, fontSize: 22, lineHeight: 28, color: COLORS.white },
-  promoSub: { fontFamily: FONTS.medium, fontSize: 12, lineHeight: 16, color: 'rgba(255,255,255,0.92)' },
+  promoGift: { width: 80, height: 76, marginTop: -3 },
+  promoBig: { fontFamily: FONTS.extrabold, fontSize: 22, lineHeight: 26, color: COLORS.white },
+  promoSub: { fontFamily: FONTS.medium, fontSize: 10, lineHeight: 12, color: COLORS.white },
   promoBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: COLORS.white, borderRadius: RADIUS.pill, paddingHorizontal: 14, height: 38,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: COLORS.white, borderRadius: RADIUS.pill, paddingHorizontal: 10, height: 32,
   },
-  promoBtnText: { fontFamily: FONTS.semibold, fontSize: 13, color: COLORS.text },
+  promoBtnText: { fontFamily: FONTS.semibold, fontSize: 11, color: COLORS.text },
 
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { fontFamily: FONTS.bold, fontSize: 19, lineHeight: 26, color: COLORS.text, flex: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  sectionTitle: { fontFamily: FONTS.bold, fontSize: 17, lineHeight: 23, color: COLORS.text, flex: 1 },
   sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sectionActionText: { fontFamily: FONTS.semibold, fontSize: 13, color: COLORS.primary },
+  sectionActionText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.primary },
   sectionBar: { width: 4, height: 22, borderRadius: 2, backgroundColor: COLORS.primary },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
   dishCard: { width: CARD_W, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, ...SHADOWS.md },
   dishImage: {
-    width: '100%', height: CARD_W * 0.72,
+    width: '100%', height: CARD_W * 0.52,
     borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg,
   },
   dishTag: {
-    position: 'absolute', top: 8, left: 8,
+    position: 'absolute', top: 6, left: 6,
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: RADIUS.pill, paddingHorizontal: 7, paddingVertical: 2,
   },
-  dishTagText: { fontFamily: FONTS.semibold, fontSize: 10, lineHeight: 14, color: COLORS.white },
+  dishTagText: { fontFamily: FONTS.semibold, fontSize: 9, lineHeight: 12, color: COLORS.white },
   dishHeart: {
-    position: 'absolute', top: 8, right: 8,
-    width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.white,
+    position: 'absolute', top: 6, right: 6,
+    width: 25, height: 25, borderRadius: 13, backgroundColor: COLORS.white,
     alignItems: 'center', justifyContent: 'center', ...SHADOWS.sm,
   },
   dishUnavailable: {
@@ -895,12 +916,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white },
-  dishBody: { padding: 10, paddingTop: 8, flex: 1 },
-  dishName: { fontFamily: FONTS.semibold, fontSize: 13, lineHeight: 18, color: COLORS.text },
-  dishDesc: { fontFamily: FONTS.regular, fontSize: 11, lineHeight: 15, color: COLORS.textMuted, marginTop: 2 },
-  dishFooter: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 8 },
-  dishPrice: { fontFamily: FONTS.bold, fontSize: 14, lineHeight: 19, color: COLORS.primary },
-  oldPrice: { fontFamily: FONTS.regular, fontSize: 11, lineHeight: 14, color: COLORS.textLight, textDecorationLine: 'line-through' },
+  dishBody: { padding: 8, paddingTop: 6, flex: 1 },
+  dishName: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 14, color: COLORS.text },
+  dishDesc: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 11, color: COLORS.textMuted, marginTop: 2 },
+  dishFooter: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, marginTop: 3 },
+  dishPrice: { fontFamily: FONTS.bold, fontSize: 13, lineHeight: 17, color: COLORS.primary },
+  oldPrice: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 12, color: COLORS.textLight, textDecorationLine: 'line-through' },
   addBtn: {
     backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
     ...SHADOWS.primary,
@@ -942,9 +963,9 @@ const styles = StyleSheet.create({
   // ── Barre panier ──
   cartBar: {
     position: 'absolute', left: SCREEN_PADDING, right: SCREEN_PADDING,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.xl,
-    paddingVertical: 10, paddingLeft: 16, paddingRight: 10, ...SHADOWS.lg,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.pill,
+    paddingVertical: 4, paddingLeft: 12, paddingRight: 4, ...SHADOWS.lg,
   },
   cartIconWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   cartBadge: {
@@ -953,13 +974,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5, borderWidth: 2, borderColor: COLORS.surface,
   },
   cartBadgeText: { fontFamily: FONTS.bold, fontSize: 10, color: COLORS.white },
-  cartSummary: { flex: 1, fontFamily: FONTS.semibold, fontSize: 13, color: COLORS.text },
+  cartSummary: { flex: 1, fontFamily: FONTS.semibold, fontSize: 11, color: COLORS.text },
   cartBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingHorizontal: 16, height: 44,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingHorizontal: 12, height: 36,
     ...SHADOWS.primary,
   },
-  cartBtnText: { fontFamily: FONTS.semibold, fontSize: 14, color: COLORS.white },
+  cartBtnText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white },
+
+  bottomNav: {
+    position: 'absolute', left: 10, right: 10,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.white, borderRadius: 34,
+    paddingHorizontal: 4, ...SHADOWS.lg,
+  },
+  bottomNavItem: { flex: 1, height: 54, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  bottomNavCenter: {
+    width: 58, height: 58, borderRadius: 29, marginTop: -31,
+    backgroundColor: COLORS.primary, borderWidth: 4, borderColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center', ...SHADOWS.primary,
+  },
+  bottomNavBadge: {
+    position: 'absolute', top: -5, right: -5, minWidth: 19, height: 19,
+    borderRadius: 10, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  bottomNavBadgeText: { fontFamily: FONTS.bold, fontSize: 9, color: COLORS.white },
+  bottomNavLabel: { fontFamily: FONTS.medium, color: COLORS.text, fontSize: 10 },
+  bottomNavActive: { fontFamily: FONTS.semibold, color: COLORS.primary },
 
   toast: {
     position: 'absolute', alignSelf: 'center', maxWidth: width - SCREEN_PADDING * 2,

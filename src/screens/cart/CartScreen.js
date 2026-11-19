@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image, StatusBar,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image, StatusBar, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +14,7 @@ import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 import { Button, Card, SmartImage, EmptyState, Divider, IconButton } from '../../components/ui';
 
 const lineKey = (item) => item.cart_key || item.id;
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const optionsLabel = (item) => {
   if (!item.selected_options || Object.keys(item.selected_options).length === 0) return null;
@@ -45,7 +46,7 @@ function CartHeader({ topInset, onBack, onClear }) {
           <Text style={styles.headerSub}>Vos plats sélectionnés</Text>
         </View>
         {IMAGES.cartHeader ? (
-          <Image source={IMAGES.cartHeader} style={styles.headerImage} resizeMode="cover" />
+          <Image source={IMAGES.cartHeader} style={styles.headerImage} resizeMode="contain" />
         ) : (
           <View style={styles.illu}>
             <View style={styles.illuCart}>
@@ -199,7 +200,7 @@ export default function CartScreen({ navigation }) {
           <EmptyState
             icon="bag-handle-outline"
             title="Votre panier est vide"
-            message="Parcourez les restaurants de Bafoussam et ajoutez vos plats préférés."
+            message="Parcourez les restaurants près de chez vous et ajoutez vos plats préférés."
             actionLabel="Découvrir les restaurants"
             onAction={() => navigation.navigate('Main', { screen: 'Accueil' })}
           />
@@ -208,8 +209,13 @@ export default function CartScreen({ navigation }) {
     );
   }
 
-  const barBottom = tabSpace - 4; // au-dessus de la barre d'onglets (et du bouton Panier surélevé)
-  const isOpen = cartRestaurant?.is_open !== false;
+  const barBottom = tabSpace + 6; // espace visuel au-dessus de la barre d'onglets
+  const hasOpenStatus = cartRestaurant?.is_open != null;
+  const isOpen = !!cartRestaurant?.is_open;
+  const missingMinimum = Math.max(0, (Number(cartRestaurant?.minimum_order) || 0) - subtotal);
+  const orderBlockedReason = hasOpenStatus && !isOpen
+    ? 'Ce restaurant est actuellement fermé.'
+    : missingMinimum > 0 ? `Ajoutez encore ${formatPrice(missingMinimum)} pour commander.` : null;
 
   return (
     <View style={styles.root}>
@@ -237,15 +243,16 @@ export default function CartScreen({ navigation }) {
                   <View style={{ flex: 1 }}>
                     <View style={styles.restoNameRow}>
                       <Text style={styles.restoName} numberOfLines={1}>{cartRestaurant.name}</Text>
+                      {cartRestaurant.is_verified === true && <Ionicons name="checkmark-circle" size={15} color={COLORS.info} />}
                     </View>
                     <View style={styles.restoMeta}>
                       <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
                       <Text style={TYPE.caption}>Livraison : {deliveryTime(cartRestaurant)}</Text>
                     </View>
                   </View>
-                  <View style={[styles.openPill, !isOpen && { backgroundColor: COLORS.dangerSoft }]}>
-                    <View style={[styles.openDot, !isOpen && { backgroundColor: COLORS.danger }]} />
-                    <Text style={[styles.openText, !isOpen && { color: COLORS.danger }]}>{isOpen ? 'Ouvert' : 'Fermé'}</Text>
+                  <View style={[styles.openPill, !hasOpenStatus && { backgroundColor: COLORS.surfaceAlt }, hasOpenStatus && !isOpen && { backgroundColor: COLORS.dangerSoft }]}>
+                    <View style={[styles.openDot, !hasOpenStatus && { backgroundColor: COLORS.textMuted }, hasOpenStatus && !isOpen && { backgroundColor: COLORS.danger }]} />
+                    <Text style={[styles.openText, !hasOpenStatus && { color: COLORS.textMuted }, hasOpenStatus && !isOpen && { color: COLORS.danger }]}>{!hasOpenStatus ? 'Horaires' : isOpen ? 'Ouvert' : 'Fermé'}</Text>
                   </View>
                 </View>
                 <Divider style={{ marginVertical: 12 }} />
@@ -275,7 +282,7 @@ export default function CartScreen({ navigation }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.couponAppliedTitle}>Code « {coupon.code} » appliqué</Text>
-                <Text style={styles.couponAppliedSub}>Vous économisez {formatPrice(discount)}</Text>
+                <Text style={styles.couponAppliedSub}>{coupon.type === 'free_delivery' ? 'Livraison offerte' : `Vous économisez ${formatPrice(discount)}`}</Text>
               </View>
               <TouchableOpacity onPress={removeCoupon} hitSlop={8}>
                 <Ionicons name="close-circle" size={22} color={COLORS.textLight} />
@@ -283,18 +290,14 @@ export default function CartScreen({ navigation }) {
             </View>
           ) : (
             <View style={styles.promo}>
-              <View style={styles.promoTop}>
-                <LinearGradient colors={GRADIENTS.primary} style={styles.giftTile}>
-                  <Ionicons name="gift" size={24} color={COLORS.white} />
-                </LinearGradient>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.promoTitle}>Code promo ?</Text>
-                  <Text style={styles.promoCaption}>
-                    {isGuest
-                      ? 'Connectez-vous pour utiliser un code promo.'
-                      : 'Entrez votre code pour bénéficier d\'une réduction'}
-                  </Text>
-                </View>
+              <LinearGradient colors={GRADIENTS.primary} style={styles.giftTile}>
+                <Ionicons name="gift" size={24} color={COLORS.white} />
+              </LinearGradient>
+              <View style={styles.promoCopy}>
+                <Text style={styles.promoTitle}>Code promo ?</Text>
+                <Text style={styles.promoCaption} numberOfLines={2}>
+                  {isGuest ? 'Connectez-vous pour utiliser un code promo.' : 'Entrez votre code pour bénéficier d\'une réduction'}
+                </Text>
               </View>
               <View style={styles.promoInputRow}>
                 <TextInput
@@ -353,10 +356,10 @@ export default function CartScreen({ navigation }) {
 
       {/* Bouton principal, au-dessus de la barre d'onglets */}
       <View style={[styles.bar, { bottom: barBottom }]} pointerEvents="box-none">
-        {isGuest ? (
+        {orderBlockedReason || isGuest ? (
           <View style={styles.guestNote}>
-            <Ionicons name="person-circle-outline" size={16} color={COLORS.primary} />
-            <Text style={styles.guestNoteText}>Connectez-vous pour finaliser votre commande</Text>
+            <Ionicons name={orderBlockedReason ? 'information-circle-outline' : 'person-circle-outline'} size={16} color={COLORS.primary} />
+            <Text style={styles.guestNoteText}>{orderBlockedReason || 'Connectez-vous pour finaliser votre commande'}</Text>
           </View>
         ) : null}
         <Button
@@ -364,6 +367,7 @@ export default function CartScreen({ navigation }) {
           icon="card-outline"
           iconRight="arrow-forward"
           onPress={() => (isGuest ? goToLogin() : navigation.navigate('Checkout'))}
+          disabled={!!orderBlockedReason}
           style={{ borderRadius: RADIUS.pill }}
         />
       </View>
@@ -372,10 +376,10 @@ export default function CartScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1, backgroundColor: '#FFF9F6' },
 
   // En-tête
-  header: { paddingHorizontal: SCREEN_PADDING, paddingBottom: 18, overflow: 'hidden' },
+  header: { paddingHorizontal: SCREEN_PADDING, paddingBottom: 14, overflow: 'hidden', minHeight: 151 },
   blobLeft: {
     position: 'absolute', top: -170, left: -120, width: 300, height: 260,
     borderBottomRightRadius: 200, borderBottomLeftRadius: 120, transform: [{ rotate: '-12deg' }],
@@ -384,10 +388,10 @@ const styles = StyleSheet.create({
     position: 'absolute', top: -90, right: -90, width: 220, height: 220, borderRadius: 110,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
-  headerBody: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 8, paddingLeft: 36 },
-  headerTitle: { fontFamily: FONTS.bold, fontSize: 22, lineHeight: 30, color: COLORS.text },
-  headerSub: { fontFamily: FONTS.medium, fontSize: 13, color: COLORS.text },
-  headerImage: { width: 150, height: 98, marginTop: -30, borderRadius: 20, borderWidth: 3, borderColor: COLORS.surface },
+  headerBody: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 7, paddingLeft: 55, minHeight: 58 },
+  headerTitle: { fontFamily: FONTS.bold, fontSize: 20, lineHeight: 25, color: COLORS.text },
+  headerSub: { fontFamily: FONTS.medium, fontSize: 12, color: COLORS.text },
+  headerImage: { width: 170, height: 125, marginTop: -53, marginRight: 18 },
   illu: { width: 130, height: 96, marginTop: -36, alignItems: 'flex-end', justifyContent: 'flex-end' },
   illuCart: {
     width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.surface,
@@ -399,13 +403,13 @@ const styles = StyleSheet.create({
     borderWidth: 3, borderColor: COLORS.surface, ...SHADOWS.primary,
   },
 
-  body: { paddingHorizontal: 14 },
+  body: { paddingHorizontal: 14, paddingTop: 1 },
   emptyWrap: { flex: 1, justifyContent: 'center' },
 
   // Carte restaurant
-  group: { marginBottom: 14, padding: 14 },
+  group: { marginBottom: 14, padding: 12, borderRadius: 22 },
   resto: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  restoLogo: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: COLORS.surface, ...SHADOWS.sm },
+  restoLogo: { width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: COLORS.surface, ...SHADOWS.sm },
   restoNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   restoName: { fontFamily: FONTS.bold, fontSize: 16, color: COLORS.text, flexShrink: 1 },
   restoMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
@@ -417,19 +421,19 @@ const styles = StyleSheet.create({
   openText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.success },
 
   // Ligne de plat
-  line: { flexDirection: 'row', gap: 12 },
-  lineImage: { width: 110, height: 92, borderRadius: RADIUS.md },
+  line: { flexDirection: 'row', gap: 11 },
+  lineImage: { width: SCREEN_WIDTH >= 380 ? 122 : 96, height: 94, borderRadius: RADIUS.md },
   promoTag: {
     position: 'absolute', top: -6, right: -8, backgroundColor: COLORS.danger,
     borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 2,
   },
   promoTagText: { fontFamily: FONTS.bold, fontSize: 11, color: COLORS.white },
   lineTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  lineName: { fontFamily: FONTS.bold, fontSize: 14, lineHeight: 19, color: COLORS.text, flex: 1 },
+  lineName: { fontFamily: FONTS.bold, fontSize: 13, lineHeight: 18, color: COLORS.text, flex: 1 },
   lineDesc: { ...TYPE.caption, marginTop: 2 },
   lineOptions: { ...TYPE.caption, color: COLORS.primary, marginTop: 2 },
   lineBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 6 },
-  linePrice: { fontFamily: FONTS.bold, fontSize: 16, color: COLORS.primary },
+  linePrice: { fontFamily: FONTS.bold, fontSize: 15, color: COLORS.primary },
 
   pill: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface,
@@ -441,21 +445,21 @@ const styles = StyleSheet.create({
 
   // Code promo
   promo: {
-    backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.xl, padding: 14, marginBottom: 14,
-    borderWidth: 1, borderColor: COLORS.primaryLight,
+    flexDirection: 'row', flexWrap: SCREEN_WIDTH < 370 ? 'wrap' : 'nowrap', alignItems: 'center', gap: 9,
+    backgroundColor: '#FFF0E6', borderRadius: RADIUS.xl, padding: 12, marginBottom: 14,
   },
-  promoTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  giftTile: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  promoTitle: { fontFamily: FONTS.bold, fontSize: 15, color: COLORS.text },
-  promoCaption: { fontFamily: FONTS.regular, fontSize: 11, lineHeight: 15, color: COLORS.textMuted },
+  promoCopy: { flex: 1, minWidth: 90 },
+  giftTile: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  promoTitle: { fontFamily: FONTS.bold, fontSize: 12, color: COLORS.text },
+  promoCaption: { fontFamily: FONTS.regular, fontSize: 10, lineHeight: 13, color: COLORS.textMuted },
   promoInputRow: {
-    flexDirection: 'row', alignItems: 'center', marginTop: 12,
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.pill, height: 48, paddingLeft: 16, paddingRight: 4,
+    flexDirection: 'row', alignItems: 'center', width: SCREEN_WIDTH < 370 ? '100%' : 138,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.pill, height: 39, paddingLeft: 10, paddingRight: 3,
     borderWidth: 1, borderColor: COLORS.primaryLight,
   },
-  promoInput: { flex: 1, fontFamily: FONTS.medium, fontSize: 14, color: COLORS.text, paddingVertical: 0 },
+  promoInput: { flex: 1, fontFamily: FONTS.medium, fontSize: 11, color: COLORS.text, paddingVertical: 0 },
   promoBtn: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary,
+    width: 33, height: 33, borderRadius: 17, backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
   },
   couponApplied: {
@@ -470,14 +474,14 @@ const styles = StyleSheet.create({
   couponAppliedSub: { ...TYPE.caption, color: COLORS.success },
 
   // Récapitulatif
-  summary: { marginBottom: 8 },
+  summary: { marginBottom: 8, borderRadius: 22 },
   summaryTitle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  sumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
-  sumLabel: { ...TYPE.body, color: COLORS.textMuted, flex: 1 },
-  sumValue: { fontFamily: FONTS.semibold, fontSize: 14, color: COLORS.text },
+  sumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  sumLabel: { ...TYPE.body, color: COLORS.textMuted, flex: 1, fontSize: 12 },
+  sumValue: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.text },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   totalLabel: { fontFamily: FONTS.bold, fontSize: 17, color: COLORS.text },
-  totalValue: { fontFamily: FONTS.bold, fontSize: 22, color: COLORS.primary },
+  totalValue: { fontFamily: FONTS.bold, fontSize: 20, color: COLORS.primary },
 
   // Barre du bas
   bar: { position: 'absolute', left: 14, right: 14 },

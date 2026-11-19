@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { orderService } from '../services/orderService';
 
@@ -91,6 +91,14 @@ export const CartProvider = ({ children }) => {
     setDiscount(0);
   }, []);
 
+  const subtotal = items.reduce((sum, i) => sum + (Number(i.effective_price ?? i.price) || 0) * i.quantity, 0);
+
+  // Un coupon validé pour un ancien montant doit être revalidé si le panier change.
+  useEffect(() => {
+    setCoupon(null);
+    setDiscount(0);
+  }, [items]);
+
   // Appliquer un coupon
   const applyCoupon = useCallback(async (code) => {
     const restaurantId = restaurant?.id || 1;
@@ -98,7 +106,7 @@ export const CartProvider = ({ children }) => {
     setCoupon(data.coupon);
     setDiscount(Number(data.discount ?? data.discount_amount) || 0); // le serveur renvoie « discount »
     return data;
-  }, [restaurant]);
+  }, [restaurant, subtotal]);
 
   const removeCoupon = useCallback(() => {
     setCoupon(null);
@@ -106,7 +114,6 @@ export const CartProvider = ({ children }) => {
   }, []);
 
   // Calculs
-  const subtotal    = items.reduce((sum, i) => sum + (i.effective_price ?? i.price) * i.quantity, 0);
   const deliveryFee = subtotal > 0 ? (coupon?.type === 'free_delivery' ? 0 : Number(restaurant?.delivery_fee ?? 500)) : 0;
   const total       = Math.max(0, subtotal + deliveryFee - discount);
   const totalItems  = items.reduce((sum, i) => sum + i.quantity, 0);

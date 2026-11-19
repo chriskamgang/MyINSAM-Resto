@@ -46,6 +46,11 @@ export default function OnboardingScreen({ navigation }) {
     navigation.replace('Login');
   };
 
+  const skipToHome = async () => {
+    try { await AsyncStorage.setItem('@onboarding_done', 'true'); } catch {}
+    navigation.navigate('Main');
+  };
+
   const next = async () => {
     if (currentIndex < slides.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
@@ -86,11 +91,9 @@ export default function OnboardingScreen({ navigation }) {
           <BrandMark size={38} />
           <Text style={styles.brandName}>Estuaire <Text style={{ color: COLORS.primary }}>Eat</Text></Text>
         </View>
-        {!isLast ? (
-          <TouchableOpacity onPress={finish} hitSlop={10} style={styles.skipBtn}>
-            <Text style={styles.skip}>Passer</Text>
-          </TouchableOpacity>
-        ) : null}
+        <TouchableOpacity onPress={skipToHome} hitSlop={10} style={styles.skipBtn}>
+          <Text style={styles.skip}>Passer</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
