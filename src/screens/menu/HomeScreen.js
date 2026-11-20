@@ -6,7 +6,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { Easing, cancelAnimation, scrollTo, useAnimatedRef, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, cancelAnimation, scrollTo, useAnimatedRef, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { restaurantService } from '../../services/restaurantService';
 import { useAuth } from '../../context/AuthContext';
@@ -15,7 +15,7 @@ import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
-import { categoryImage, categoryIcon } from '../../theme/images';
+import { categoryImage, categoryIcon, dishFallbackImage } from '../../theme/images';
 import {
   Screen, SearchBar, SectionHeader, SmartImage, Rating, MetaItem, EmptyState, LoadingView, IconButton,
 } from '../../components/ui';
@@ -119,6 +119,7 @@ export default function HomeScreen({ navigation }) {
   const [activeCat, setActiveCat]     = useState(null);
   const [search, setSearch]           = useState('');
   const [loading, setLoading]         = useState(true);
+  const [menusLoading, setMenusLoading] = useState(false);
   const [refreshing, setRefreshing]   = useState(false);
   const [error, setError]             = useState(false);
   const [sheetOpen, setSheetOpen]     = useState(false);
@@ -130,12 +131,20 @@ export default function HomeScreen({ navigation }) {
   const categoryYRef = useRef(0);
   const bannerRef = useAnimatedRef();
   const bannerOffset = useSharedValue(0);
+  const brandIntro = useSharedValue(0);
   const bannerDraggingRef = useRef(false);
   const bannerAutoRef = useRef(false);
   const bannerAutoEndRef = useRef(null);
   const bannerIndexRef = useRef(0);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [featureIndex, setFeatureIndex] = useState(0);
+  const brandAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: brandIntro.value,
+    transform: [{ translateY: (1 - brandIntro.value) * 8 }],
+  }));
+  useEffect(() => {
+    brandIntro.value = withTiming(1, { duration: 450, easing: Easing.out(Easing.cubic) });
+  }, [brandIntro]);
 
   // Plats de tous les restaurants, chargés en arrière-plan pour la recherche
   const loadDishes = useCallback(async (list, reset) => {
@@ -159,7 +168,8 @@ export default function HomeScreen({ navigation }) {
       setRestaurants(list);
       setPage(restData?.current_page || 1);
       setHasMore(!!restData?.last_page && restData.current_page < restData.last_page);
-      await loadDishes(list, true);
+      setMenusLoading(true);
+      loadDishes(list, true).catch(() => setError(true)).finally(() => setMenusLoading(false));
     } catch (e) {
       setError(true);
     } finally {
@@ -287,14 +297,14 @@ export default function HomeScreen({ navigation }) {
       bannerIndexRef.current = next % recentDishes.length;
       bannerAutoRef.current = true;
       bannerOffset.value = withTiming(next * BANNER_WIDTH, {
-        duration: 2300,
+        duration: 1400,
         easing: Easing.inOut(Easing.sin),
       }, (finished) => {
         if (finished && next === recentDishes.length) bannerOffset.value = 0;
       });
       setBannerIndex(next % recentDishes.length);
-      bannerAutoEndRef.current = setTimeout(() => { bannerAutoRef.current = false; }, 2400);
-    }, 7200);
+      bannerAutoEndRef.current = setTimeout(() => { bannerAutoRef.current = false; }, 1500);
+    }, 6500);
     return () => {
       clearInterval(timer);
       if (bannerAutoEndRef.current) clearTimeout(bannerAutoEndRef.current);
@@ -314,7 +324,7 @@ export default function HomeScreen({ navigation }) {
   if (loading) return <Screen><LoadingView label="Chargement des restaurants…" /></Screen>;
 
   return (
-    <Screen edges={[]} bg="#FFF8F3" statusBar={showSearch ? 'dark-content' : 'light-content'}>
+    <Screen edges={[]} bg="#FFF8F3" statusBar="light-content">
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
@@ -343,7 +353,7 @@ export default function HomeScreen({ navigation }) {
             >
               {heroSlides.map((item, slideIndex) => (
                 <TouchableOpacity key={`${item._restaurant?.id}-${item.id}-${slideIndex}`} style={[styles.heroSlide, { height: insets.top + 285 }]} activeOpacity={0.96} onPress={() => openDish(item)}>
-                  <SmartImage uri={item.image} fallbackSource={HERO_IMAGE} style={StyleSheet.absoluteFill} />
+                  <SmartImage uri={item.image} fallbackSource={dishFallbackImage(item)} style={StyleSheet.absoluteFill} />
                   <LinearGradient colors={['transparent', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.88)']} locations={[0.35, 0.58, 1]} style={StyleSheet.absoluteFill} />
                   <View style={styles.heroCopy}>
                     <View style={styles.heroCopyText}>
@@ -371,13 +381,15 @@ export default function HomeScreen({ navigation }) {
               <IconButton icon="share-social-outline" size={39} onPress={shareApp} />
             </View>
           </View>
-          <TouchableOpacity style={[styles.brandBlock, { top: insets.top + 49 }]} onPress={openAllRestaurants} accessibilityLabel="Voir les restaurants Estuaire Eat">
-            <View style={styles.brandIcon}>
-              <MaterialCommunityIcons name="chef-hat" size={29} color="#fff" style={{ position: 'absolute', top: 7 }} />
-              <MaterialCommunityIcons name="silverware-fork-knife" size={27} color="#FF8A00" style={{ position: 'absolute', bottom: 7 }} />
-            </View>
-            <View><Text style={styles.brandName}>ESTUAIRE</Text><Text style={styles.brandEat}>EAT_</Text><Text style={styles.brandTagline}>Bon goût, toujours !</Text></View>
-          </TouchableOpacity>
+          {!showSearch && <Animated.View style={[styles.brandBlock, brandAnimatedStyle, { top: insets.top + 49 }]}>
+            <TouchableOpacity style={styles.brandTap} onPress={openAllRestaurants} accessibilityLabel="Voir les restaurants Estuaire Eat">
+              <View style={styles.brandIcon}>
+                <MaterialCommunityIcons name="chef-hat" size={29} color="#fff" style={{ position: 'absolute', top: 7 }} />
+                <MaterialCommunityIcons name="silverware-fork-knife" size={27} color="#FF8A00" style={{ position: 'absolute', bottom: 7 }} />
+              </View>
+              <View><Text style={styles.brandName}>ESTUAIRE</Text><Text style={styles.brandEat}>EAT_</Text><Text style={styles.brandTagline}>Bon goût, toujours !</Text></View>
+            </TouchableOpacity>
+          </Animated.View>}
           {!showSearch && recentDishes.length > 1 && <View pointerEvents="none" style={styles.heroDots}>{recentDishes.map((item, index) => <View key={`${item._restaurant?.id}-${item.id}`} style={[styles.heroDot, index === bannerIndex && styles.heroDotActive]} />)}</View>}
         </View>
 
@@ -429,7 +441,7 @@ export default function HomeScreen({ navigation }) {
                 />
                 {recentRestaurants.length > 1 && <View style={styles.featureDots}>{recentRestaurants.map((restaurant, index) => <View key={restaurant.id} style={[styles.featureDot, featureIndex === index && styles.featureDotActive]} />)}</View>}
               </>
-            ) : loadingMore || hasMore ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>{activeCat ? 'Aucun restaurant ne propose encore cette catégorie.' : 'Les nouveaux menus apparaîtront ici bientôt.'}</Text>}
+            ) : menusLoading || loadingMore || hasMore ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>{activeCat ? 'Aucun restaurant ne propose encore cette catégorie.' : 'Les nouveaux menus apparaîtront ici bientôt.'}</Text>}
 
             <TouchableOpacity style={styles.clocheBanner} onPress={openAllRestaurants} activeOpacity={0.9}>
               <Image source={CLOCHE_IMAGE} style={styles.fillImage} resizeMode="cover" />
@@ -454,10 +466,11 @@ const styles = StyleSheet.create({
   locationTouch: { flexDirection: 'row', alignItems: 'center', maxWidth: 170, gap: 3, paddingVertical: 6 },
   locationText: { fontFamily: FONTS.semibold, color: '#fff', fontSize: 11 },
   heroActions: { flexDirection: 'row', gap: 8 },
-  brandBlock: { position: 'absolute', left: 17, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandBlock: { position: 'absolute', left: 13, borderRadius: 18, padding: 5, paddingRight: 11, backgroundColor: 'rgba(8,6,4,0.62)' },
+  brandTap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandIcon: { width: 73, height: 67, borderRadius: 36, borderWidth: 2, borderColor: '#FF8C00', backgroundColor: '#100B08', alignItems: 'center', justifyContent: 'center' },
   brandName: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#fff', fontSize: 20, lineHeight: 22 },
-  brandEat: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#FF7800', fontSize: 31, lineHeight: 31 },
+  brandEat: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#FFAA1A', fontSize: 31, lineHeight: 31 },
   brandTagline: { fontFamily: FONTS.semibold, fontStyle: 'italic', color: '#fff', fontSize: 11, lineHeight: 15 },
   heroCopy: { position: 'absolute', left: 17, right: 17, bottom: 30, flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroCopyText: { flex: 1 },

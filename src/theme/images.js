@@ -43,3 +43,13 @@ export function categoryIcon(name = '') {
   const hit = CATEGORY_ICONS.find(([re]) => re.test(name));
   return hit ? hit[1] : 'storefront';
 }
+
+// Photo d'attente pendant le chargement des images du menu distant.
+export function dishFallbackImage(item = {}) {
+  const label = `${item.name || ''} ${item.category?.name || ''} ${item.category_name || ''}`;
+  if (/pizza/i.test(label)) return require('../../assets/images/category-pizza.png');
+  if (/grill|brais|brochette|soya|barbecue/i.test(label)) return require('../../assets/images/category-grillades.png');
+  if (/ndol|eru|okok|koki|foufou|taro|plantain|africain|cameroun/i.test(label)) return require('../../assets/images/category-cameroon-ndole.png');
+  if (/dessert|cr[eê]pe|g[âa]teau|glace|sucr[eé]|chocolat/i.test(label)) return require('../../assets/images/home-dessert.png');
+  return require('../../assets/images/home-grill-hero.png');
+}

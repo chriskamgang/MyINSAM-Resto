@@ -11,6 +11,7 @@ import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
+import { dishFallbackImage } from '../../theme/images';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = 205;
@@ -219,7 +220,7 @@ function DishCard({ item, liked, onLike, onPress, onAdd }) {
 
   return (
     <TouchableOpacity style={styles.dishCard} onPress={() => onPress(item)} activeOpacity={0.9}>
-      <SmartImage uri={item.image} style={styles.dishImage} iconSize={30}>
+      <SmartImage uri={item.image} fallbackSource={dishFallbackImage(item)} style={styles.dishImage} iconSize={30}>
         {unavailable ? (
           <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText}>Indisponible</Text></View>
         ) : null}
@@ -292,18 +293,12 @@ export default function RestaurantScreen({ route, navigation }) {
   const loadMenu = useCallback(async () => {
     try {
       setError(false);
-      // Le menu ne renvoie qu'un sous-ensemble du restaurant : on charge aussi la fiche
-      // complète (adresse, téléphone, horaires, coordonnées) sans bloquer si elle échoue.
-      const [menuRes, detailRes] = await Promise.allSettled([
-        restaurantService.getMenu(routeRestaurant.id),
-        restaurantService.getRestaurant(routeRestaurant.id),
-      ]);
-      if (detailRes.status === 'fulfilled' && detailRes.value && typeof detailRes.value === 'object') {
-        const detail = detailRes.value.data && detailRes.value.data.id ? detailRes.value.data : detailRes.value;
-        setRestaurant(prev => ({ ...prev, ...detail }));
-      }
-      if (menuRes.status === 'rejected') throw menuRes.reason;
-      const data = menuRes.value || {};
+      // Les détails enrichissent la fiche en arrière-plan sans retarder l'affichage du menu.
+      restaurantService.getRestaurant(routeRestaurant.id).then((response) => {
+        const detail = response?.data?.id ? response.data : response;
+        if (detail?.id) setRestaurant((prev) => ({ ...prev, ...detail }));
+      }).catch(() => {});
+      const data = await restaurantService.getMenu(routeRestaurant.id) || {};
       if (data.restaurant) setRestaurant(prev => ({ ...prev, ...data.restaurant }));
       setCategories(data.menu || []);
     } catch (e) {
@@ -509,7 +504,14 @@ export default function RestaurantScreen({ route, navigation }) {
         {/* ── Couverture + identité + bandeau d'infos ── */}
         <View onLayout={e => setStickY(e.nativeEvent.layout.height)}>
           <SmartImage uri={heroDish?.image || restaurant.cover_image || restaurant.logo} fallbackSource={HERO_FALLBACK} style={styles.hero}>
-            <LinearGradient colors={['rgba(0,0,0,0.48)', 'transparent', 'rgba(0,0,0,0.18)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <LinearGradient colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.25)', 'transparent']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <View style={[styles.heroBrand, { top: insets.top + 48 }]} pointerEvents="none">
+              <SmartImage uri={restaurant.logo} style={styles.heroLogo} fallbackIcon="restaurant" iconSize={35} />
+              <View style={styles.heroBrandCopy}>
+                <Text style={styles.heroBrandName} numberOfLines={2}>{clean(restaurant.name)}</Text>
+                <Text style={styles.heroBrandSub} numberOfLines={1}>{cuisine}</Text>
+              </View>
+            </View>
             {photos.length > 0 ? (
               <TouchableOpacity
                 style={styles.photoCountBtn}
@@ -525,10 +527,6 @@ export default function RestaurantScreen({ route, navigation }) {
           {/* Feuille blanche au bord arrondi qui recouvre le bas de la photo */}
           <View style={styles.sheet}>
             <View style={styles.identity}>
-              <View style={styles.logoWrap}>
-                <SmartImage uri={restaurant.logo} style={styles.logo} fallbackIcon="storefront-outline" iconSize={30} />
-                {restaurant.is_verified === true && <View style={styles.verified}><Ionicons name="checkmark" size={14} color={COLORS.white} /></View>}
-              </View>
               <View style={styles.identityText}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name} numberOfLines={2}>{clean(restaurant.name)}</Text>
@@ -781,7 +779,7 @@ export default function RestaurantScreen({ route, navigation }) {
       <View style={[styles.bottomNav, { height: BOTTOM_NAV_HEIGHT, bottom: Math.max(insets.bottom, 8) }]}>
         {[
           { route: 'Accueil', icon: 'home', label: 'Accueil' },
-          { route: 'Explorer', icon: 'compass-outline', label: 'Explorer' },
+          { route: 'Marché', icon: 'basket-outline', label: 'Marché' },
           { route: 'Panier', icon: 'cart-outline', label: 'Panier', center: true },
           { route: 'Favoris', icon: 'heart-outline', label: 'Favoris' },
           { route: 'Profil', icon: 'person-outline', label: 'Profil' },
@@ -804,6 +802,11 @@ const styles = StyleSheet.create({
 
   // ── Couverture ──
   hero: { width: '100%', height: HERO_HEIGHT },
+  heroBrand: { position: 'absolute', left: 18, right: 70, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroLogo: { width: 75, height: 75, borderRadius: 38, borderWidth: 2, borderColor: '#FF9D11', backgroundColor: '#160B08' },
+  heroBrandCopy: { flex: 1 },
+  heroBrandName: { fontFamily: FONTS.extrabold, fontSize: 20, lineHeight: 24, color: COLORS.white, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 6 },
+  heroBrandSub: { fontFamily: FONTS.medium, fontSize: 11, color: '#FFF0DD', marginTop: 2 },
   heroTopFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   photoCountBtn: {
     position: 'absolute', right: SCREEN_PADDING, bottom: SHEET_OVERLAP + 12,
@@ -834,18 +837,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30, borderTopRightRadius: 30,
     paddingHorizontal: SCREEN_PADDING, paddingBottom: 3,
   },
-  identity: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  logoWrap: { marginTop: -30 },
-  logo: {
-    width: 88, height: 88, borderRadius: 44,
-    borderWidth: 4, borderColor: COLORS.surface,
-    ...SHADOWS.md,
-  },
-  verified: {
-    position: 'absolute', right: 4, bottom: 4,
-    width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.primary,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: COLORS.surface,
-  },
+  identity: { flexDirection: 'row', alignItems: 'flex-end' },
   identityText: { flex: 1, paddingTop: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontFamily: FONTS.bold, fontSize: 20, lineHeight: 25, color: COLORS.text, flexShrink: 1 },

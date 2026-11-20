@@ -1,6 +1,6 @@
 // Composants UI partagés Estuaire Eat. Tous les écrans s'appuient dessus
 // pour garder un design cohérent (voir src/theme).
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator,
   StyleSheet, StatusBar, Pressable,
@@ -245,12 +245,14 @@ export function SectionHeader({ title, icon, actionLabel = 'Voir tout', onAction
 // Évite les gros blocs gris vides quand un plat n'a pas de photo.
 export function SmartImage({ uri, source, fallbackSource, style, fallbackIcon = 'restaurant-outline', iconSize = 28, resizeMode = 'cover', children }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const url = source ? null : getImageUrl(uri);
+  useEffect(() => { setFailed(false); setLoaded(false); }, [url, source]);
   const hasImage = source || (url && !failed);
   const fillImage = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' };
   return (
     <View style={[{ overflow: 'hidden', backgroundColor: COLORS.surfaceAlt }, style]}>
-      {fallbackSource ? (
+      {fallbackSource && (!hasImage || !loaded) ? (
         <Image source={fallbackSource} style={fillImage} resizeMode={resizeMode} />
       ) : !hasImage ? (
         <LinearGradient colors={['#FFF4EC', '#FFE6D6']} style={[StyleSheet.absoluteFill, styles.fallback]}>
@@ -260,9 +262,10 @@ export function SmartImage({ uri, source, fallbackSource, style, fallbackIcon = 
       {hasImage ? (
         <Image
           source={source || { uri: url }}
-          style={fillImage}
+          style={[fillImage, fallbackSource && !loaded && { opacity: 0 }]}
           resizeMode={resizeMode}
           onError={() => setFailed(true)}
+          onLoad={() => setLoaded(true)}
         />
       ) : null}
       {children}

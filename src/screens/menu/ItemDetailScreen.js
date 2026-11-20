@@ -12,10 +12,11 @@ import { useDeliveryLocation, distanceKm } from '../../context/DeliveryLocationC
 import { restaurantService } from '../../services/restaurantService';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, Badge, SmartImage, QuantityStepper } from '../../components/ui';
+import { dishFallbackImage } from '../../theme/images';
 
-const { width } = Dimensions.get('window');
-const HEADER_H = 320;
-const SHEET_OVERLAP = 30;
+const { width, height } = Dimensions.get('window');
+const HEADER_H = Math.max(420, Math.min(Math.round(height * 0.68), 680));
+const SHEET_OVERLAP = 42;
 const SUGGEST_W = 150;
 const OPTION_W = 128;
 
@@ -73,7 +74,7 @@ function getAllImages(item) {
 }
 
 // ── En-tête photo plein écran (sous la barre d'état) ──
-function ImageCarousel({ images, onBack, liked, onLike, onShare, topInset, rating, ratingCount }) {
+function ImageCarousel({ images, fallbackSource, onBack, liked, onLike, onShare, topInset, rating, ratingCount }) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const onScroll = (e) => {
@@ -84,7 +85,7 @@ function ImageCarousel({ images, onBack, liked, onLike, onShare, topInset, ratin
   return (
     <View style={styles.imageContainer}>
       {images.length === 0 ? (
-        <SmartImage style={styles.carouselImage} fallbackIcon="restaurant-outline" iconSize={72} />
+        <SmartImage style={styles.carouselImage} fallbackSource={fallbackSource} fallbackIcon="restaurant-outline" iconSize={72} />
       ) : (
         <FlatList
           data={images}
@@ -95,7 +96,7 @@ function ImageCarousel({ images, onBack, liked, onLike, onShare, topInset, ratin
           onScroll={onScroll}
           scrollEventThrottle={16}
           renderItem={({ item: img }) => (
-            <SmartImage uri={img} style={styles.carouselImage} fallbackIcon="restaurant-outline" iconSize={72} />
+            <SmartImage uri={img} fallbackSource={fallbackSource} style={styles.carouselImage} fallbackIcon="restaurant-outline" iconSize={72} />
           )}
         />
       )}
@@ -407,6 +408,7 @@ export default function ItemDetailScreen({ route, navigation }) {
       >
         <ImageCarousel
           images={allImages}
+          fallbackSource={dishFallbackImage(item)}
           onBack={() => navigation.goBack()}
           liked={liked}
           onLike={onLike}
