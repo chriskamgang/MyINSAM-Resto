@@ -344,13 +344,13 @@ export default function HomeScreen({ navigation }) {
               {heroSlides.map((item, slideIndex) => (
                 <TouchableOpacity key={`${item._restaurant?.id}-${item.id}-${slideIndex}`} style={[styles.heroSlide, { height: insets.top + 285 }]} activeOpacity={0.96} onPress={() => openDish(item)}>
                   <SmartImage uri={item.image} fallbackSource={HERO_IMAGE} style={StyleSheet.absoluteFill} />
-                  <LinearGradient colors={['rgba(0,0,0,0.89)', 'rgba(0,0,0,0.58)', 'rgba(0,0,0,0.04)']} start={{ x: 0, y: 0.6 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
-                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.54)']} style={StyleSheet.absoluteFill} />
-                  <View style={[styles.heroCopy, { top: insets.top + 130 }]}>
-                    <Text style={styles.heroEyebrow}>DÉCOUVREZ NOS NOUVEAUTÉS</Text>
-                    <Text style={styles.heroDishName} numberOfLines={2}>{item.name}</Text>
-                    <Text style={styles.heroRestaurant} numberOfLines={1}>Chez {item._restaurant?.name || 'Estuaire Eat'}</Text>
-                    <View style={styles.heroCta}><Text style={styles.heroCtaText}>Voir le plat</Text><View style={styles.heroCtaIcon}><Ionicons name="arrow-forward" size={15} color={COLORS.primary} /></View></View>
+                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.88)']} locations={[0.35, 0.58, 1]} style={StyleSheet.absoluteFill} />
+                  <View style={styles.heroCopy}>
+                    <View style={styles.heroCopyText}>
+                      <Text style={styles.heroDishName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.heroRestaurant} numberOfLines={1}>{item._restaurant?.name || 'Estuaire Eat'}</Text>
+                    </View>
+                    <View style={styles.heroCtaIcon}><Ionicons name="arrow-forward" size={18} color={COLORS.primary} /></View>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -358,8 +358,8 @@ export default function HomeScreen({ navigation }) {
           ) : (
             <View style={[styles.heroSlide, { height: insets.top + 285 }]}>
               <Image source={HERO_IMAGE} style={styles.fillImage} resizeMode="cover" />
-              <LinearGradient colors={['rgba(0,0,0,0.8)', 'transparent']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
-              <View style={[styles.heroCopy, { top: insets.top + 145 }]}><Text style={styles.heroDishName}>Le vrai goût</Text><Text style={styles.heroRestaurant}>de la bonne cuisine !</Text></View>
+              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={StyleSheet.absoluteFill} />
+              <View style={styles.heroCopy}><View style={styles.heroCopyText}><Text style={styles.heroDishName}>Le vrai goût</Text><Text style={styles.heroRestaurant}>de la bonne cuisine !</Text></View></View>
             </View>
           ))}
           <View pointerEvents="box-none" style={[styles.heroTop, { top: insets.top + 8 }]}>
@@ -459,13 +459,11 @@ const styles = StyleSheet.create({
   brandName: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#fff', fontSize: 20, lineHeight: 22 },
   brandEat: { fontFamily: FONTS.extrabold, fontStyle: 'italic', color: '#FF7800', fontSize: 31, lineHeight: 31 },
   brandTagline: { fontFamily: FONTS.semibold, fontStyle: 'italic', color: '#fff', fontSize: 11, lineHeight: 15 },
-  heroCopy: { position: 'absolute', left: 19, width: width * 0.59 },
-  heroEyebrow: { color: '#FFBB72', fontFamily: FONTS.bold, fontSize: 9, letterSpacing: 1 },
-  heroDishName: { color: '#fff', fontFamily: FONTS.extrabold, fontStyle: 'italic', fontSize: 25, lineHeight: 28, marginTop: 3 },
-  heroRestaurant: { color: '#fff', fontFamily: FONTS.medium, fontSize: 12, marginTop: 3 },
-  heroCta: { flexDirection: 'row', alignItems: 'center', gap: 9, alignSelf: 'flex-start', marginTop: 13, paddingLeft: 13, paddingRight: 5, height: 30, borderRadius: 18, backgroundColor: COLORS.primary },
-  heroCtaText: { color: '#fff', fontFamily: FONTS.semibold, fontSize: 10 },
-  heroCtaIcon: { width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  heroCopy: { position: 'absolute', left: 17, right: 17, bottom: 30, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroCopyText: { flex: 1 },
+  heroDishName: { color: '#fff', fontFamily: FONTS.extrabold, fontStyle: 'italic', fontSize: 20, lineHeight: 24 },
+  heroRestaurant: { color: '#fff', fontFamily: FONTS.medium, fontSize: 11, marginTop: 1 },
+  heroCtaIcon: { width: 31, height: 31, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   heroDots: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   heroDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.8)' },
   heroDotActive: { backgroundColor: COLORS.primary, width: 13 },

@@ -10,7 +10,7 @@ import { restaurantService } from '../../services/restaurantService';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
-import { IconButton, SmartImage, EmptyState, LoadingView } from '../../components/ui';
+import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = 205;
@@ -20,8 +20,9 @@ const TOP_BAR_H = 56;
 const GRID_GAP = 10;
 const CARD_SIDE = 14;
 const CARD_W = (width - CARD_SIDE * 2 - GRID_GAP) / 2;
-const POPULAR_LIMIT = 6;
+const POPULAR_LIMIT = 4;
 const PROMO_GIFT = require('../../../assets/images/restaurant-promo-gift.png');
+const HERO_FALLBACK = require('../../../assets/images/home-grill-hero.png');
 
 // ── Utilitaires ──
 const clean = (s) => (typeof s === 'string' ? s.trim().replace(/\s+/g, ' ') : s);
@@ -262,6 +263,7 @@ export default function RestaurantScreen({ route, navigation }) {
   const [restaurant, setRestaurant] = useState(routeRestaurant);
   const [categories, setCategories] = useState([]);
   const [filter, setFilter] = useState('all'); // 'all' | 'promos' | id de catégorie
+  const [search, setSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -322,6 +324,7 @@ export default function RestaurantScreen({ route, navigation }) {
     [categories]
   );
   const allItems = useMemo(() => visibleCategories.flatMap(c => c.items), [visibleCategories]);
+  const heroDish = allItems.find((item) => item.is_featured && item.image) || allItems.find((item) => item.image);
   const promoItems = useMemo(() => allItems.filter(i => pricing(i).hasPromo), [allItems]);
   const maxPercent = promoItems.reduce((m, i) => Math.max(m, pricing(i).percent), 0);
 
@@ -333,13 +336,18 @@ export default function RestaurantScreen({ route, navigation }) {
     () => [...allItems].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)),
     [allItems]
   );
+  const query = clean(search).toLocaleLowerCase('fr');
   let gridItems; let sectionTitle;
   if (activeFilter === 'promos') { gridItems = promoItems; sectionTitle = 'Promotions'; }
   else if (activeFilter === 'all') {
-    gridItems = showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
+    gridItems = query || showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
     sectionTitle = allItems.some((item) => item.is_featured) ? 'Nos plats populaires' : 'Tous les plats';
   } else { gridItems = currentCategory.items; sectionTitle = labelize(currentCategory.name); }
-  const canExpand = activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
+  if (query) {
+    gridItems = gridItems.filter((item) => `${item.name || ''} ${item.description || ''} ${visibleCategories.find((category) => category.id === item.menu_category_id)?.name || ''}`.toLocaleLowerCase('fr').includes(query));
+    sectionTitle = 'Résultats dans ce restaurant';
+  }
+  const canExpand = !query && activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
 
   const isOpen = !!restaurant.is_open;
   const hasOpenStatus = restaurant.is_open != null;
@@ -428,8 +436,8 @@ export default function RestaurantScreen({ route, navigation }) {
     return (
       <View style={[styles.menuSection, { minHeight: SCREEN_H - topBarH - 90 }]}>
         {/* Bannière promo : uniquement s'il existe de vraies réductions */}
-        {promoItems.length > 0 && activeFilter !== 'promos' ? (
-          <LinearGradient colors={['#FFAE12', '#FF7907', '#FF5F06']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.promo}>
+        {promoItems.length > 0 && activeFilter !== 'promos' && !query ? (
+          <LinearGradient colors={['#1C0B06', '#582009', '#FF7100']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.promo}>
             <Image source={PROMO_GIFT} style={styles.promoGift} resizeMode="contain" />
             <View style={{ flex: 1 }}>
               <Text style={styles.promoBig}>-{maxPercent}%</Text>
@@ -456,7 +464,7 @@ export default function RestaurantScreen({ route, navigation }) {
           )}
         </View>
 
-        <View style={styles.grid}>
+        {gridItems.length ? <View style={styles.grid}>
           {gridItems.map(item => (
             <DishCard
               key={item.id}
@@ -467,7 +475,7 @@ export default function RestaurantScreen({ route, navigation }) {
               onAdd={handleAdd}
             />
           ))}
-        </View>
+        </View> : <EmptyState icon="search-outline" title="Aucun plat trouvé" message={query ? `Aucun plat ne correspond à « ${clean(search)} » dans ce restaurant.` : 'Aucun plat dans cette catégorie pour le moment.'} actionLabel={query ? 'Effacer la recherche' : undefined} onAction={() => setSearch('')} />}
 
         {canExpand && !showAll ? (
           <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAll(true)} activeOpacity={0.85}>
@@ -486,6 +494,7 @@ export default function RestaurantScreen({ route, navigation }) {
       <Animated.ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={[1]}
         scrollEventThrottle={16}
         onScroll={Animated.event(
@@ -499,8 +508,8 @@ export default function RestaurantScreen({ route, navigation }) {
       >
         {/* ── Couverture + identité + bandeau d'infos ── */}
         <View onLayout={e => setStickY(e.nativeEvent.layout.height)}>
-          <SmartImage uri={restaurant.cover_image || restaurant.logo} style={styles.hero} fallbackIcon="restaurant" iconSize={56}>
-            <LinearGradient colors={['rgba(0,0,0,0.45)', 'transparent']} style={styles.heroTopFade} pointerEvents="none" />
+          <SmartImage uri={heroDish?.image || restaurant.cover_image || restaurant.logo} fallbackSource={HERO_FALLBACK} style={styles.hero}>
+            <LinearGradient colors={['rgba(0,0,0,0.48)', 'transparent', 'rgba(0,0,0,0.18)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
             {photos.length > 0 ? (
               <TouchableOpacity
                 style={styles.photoCountBtn}
@@ -567,6 +576,9 @@ export default function RestaurantScreen({ route, navigation }) {
                 {isOpen && closeLabel ? <Text style={styles.openSub}>Jusqu'à {closeLabel}</Text> : null}
               </View>
             </View>
+          </View>
+          <View style={styles.restaurantSearchRow}>
+            <SearchBar value={search} onChangeText={setSearch} placeholder={`Rechercher un plat chez ${clean(restaurant.name)}...`} style={styles.restaurantSearch} />
           </View>
         </View>
 
@@ -769,9 +781,9 @@ export default function RestaurantScreen({ route, navigation }) {
       <View style={[styles.bottomNav, { height: BOTTOM_NAV_HEIGHT, bottom: Math.max(insets.bottom, 8) }]}>
         {[
           { route: 'Accueil', icon: 'home', label: 'Accueil' },
-          { route: 'Marché', icon: 'basket-outline', label: 'Marché' },
+          { route: 'Explorer', icon: 'compass-outline', label: 'Explorer' },
           { route: 'Panier', icon: 'cart-outline', label: 'Panier', center: true },
-          { route: 'Commandes', icon: 'receipt-outline', label: 'Commandes' },
+          { route: 'Favoris', icon: 'heart-outline', label: 'Favoris' },
           { route: 'Profil', icon: 'person-outline', label: 'Profil' },
         ].map((tab) => (
           <TouchableOpacity key={tab.route} style={styles.bottomNavItem} onPress={() => navigation.navigate('Main', { screen: tab.route })} activeOpacity={0.8}>
@@ -788,7 +800,7 @@ export default function RestaurantScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFDFC' },
+  container: { flex: 1, backgroundColor: '#FFF8F3' },
 
   // ── Couverture ──
   hero: { width: '100%', height: HERO_HEIGHT },
@@ -861,11 +873,14 @@ const styles = StyleSheet.create({
   openText: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16 },
   openSub: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 12, color: COLORS.textMuted },
 
+  restaurantSearchRow: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 8, backgroundColor: '#FFF8F3' },
+  restaurantSearch: { height: 43, borderRadius: 23, borderWidth: 0, backgroundColor: COLORS.white, ...SHADOWS.sm },
+
   // ── Tuiles catégories ──
-  stickyWrap: { backgroundColor: '#FFFDFC', zIndex: 2 },
-  tilesContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 2 },
+  stickyWrap: { backgroundColor: '#FFF8F3', zIndex: 2 },
+  tilesContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 5 },
   tile: {
-    width: 54, height: 48, borderRadius: 24,
+    width: 65, height: 55, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2,
   },
   tileIdle: { backgroundColor: COLORS.surface, ...SHADOWS.sm },
@@ -880,7 +895,7 @@ const styles = StyleSheet.create({
     borderRadius: 17, paddingHorizontal: 9, height: 73, marginBottom: 11, ...SHADOWS.primary,
   },
   promoGift: { width: 80, height: 76, marginTop: -3 },
-  promoBig: { fontFamily: FONTS.extrabold, fontSize: 22, lineHeight: 26, color: COLORS.white },
+  promoBig: { fontFamily: FONTS.extrabold, fontSize: 23, lineHeight: 27, color: '#FFCE31' },
   promoSub: { fontFamily: FONTS.medium, fontSize: 10, lineHeight: 12, color: COLORS.white },
   promoBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
