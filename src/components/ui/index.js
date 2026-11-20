@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator,
-  StyleSheet, StatusBar, Pressable,
+  StyleSheet, StatusBar, Pressable, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -156,13 +156,16 @@ export function Input({ label, icon, error, right, style, inputStyle, multiline,
 // ── Barre de recherche ──
 export function SearchBar({ value, onChangeText, placeholder = 'Rechercher un plat ou un restaurant', onFilterPress, onSubmit, autoFocus, style, editable = true, onPress }) {
   const Wrapper = onPress ? TouchableOpacity : View;
+  const [focused, setFocused] = useState(false);
   return (
-    <Wrapper style={[styles.search, style]} onPress={onPress} activeOpacity={0.9}>
+    <Wrapper style={[styles.search, style, focused && styles.searchFocused]} onPress={onPress} activeOpacity={0.9}>
       <Ionicons name="search" size={18} color={COLORS.primary} />
       <TextInput
-        style={styles.searchInput}
+        style={[styles.searchInput, Platform.OS === 'web' && styles.searchInputWeb]}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder={placeholder}
         placeholderTextColor={COLORS.textLight}
         returnKeyType="search"
@@ -418,6 +421,8 @@ const styles = StyleSheet.create({
     paddingLeft: 14, paddingRight: 4, height: 46, ...SHADOWS.sm,
   },
   searchInput: { flex: 1, fontFamily: FONTS.regular, fontSize: 14, color: COLORS.text, paddingVertical: 0 },
+  searchInputWeb: { outlineStyle: 'none', outlineWidth: 0 },
+  searchFocused: { borderColor: COLORS.primary, ...(Platform.OS === 'web' ? { boxShadow: '0 0 0 3px rgba(255,107,53,0.15)' } : SHADOWS.primary) },
   searchFilter: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primarySoft,
     alignItems: 'center', justifyContent: 'center',
