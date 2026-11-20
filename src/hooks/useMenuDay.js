@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 const KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const LABELS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -81,11 +82,13 @@ export function getDishUnavailableLabel(item, day = getMenuDay()) {
 export default function useMenuDay() {
   const [day, setDay] = useState(getMenuDay);
   useEffect(() => {
-    const timer = setInterval(() => {
+    const refreshDay = () => {
       const current = getMenuDay();
       setDay((previous) => previous.key === current.key ? previous : current);
-    }, 60000);
-    return () => clearInterval(timer);
+    };
+    const timer = setInterval(refreshDay, 60000);
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') refreshDay(); });
+    return () => { clearInterval(timer); subscription.remove(); };
   }, []);
   return day;
 }

@@ -238,7 +238,7 @@ export default function HomeScreen({ navigation }) {
 
   const q = search.trim().toLowerCase();
   const categoryMatcher = FOOD_CATEGORIES.find((c) => c.id === activeCat)?.matcher;
-  const selectCategory = (id) => { setActiveCat(id === 'all' ? null : id); setFeatureIndex(0); };
+  const selectCategory = (id) => { setActiveCat(id === 'all' ? null : id); setFeatureIndex(0); setShowAllPopular(false); };
   useEffect(() => {
     if (!loading && hasMore && !loadingMore) loadMore();
   }, [loading, hasMore, loadingMore, loadMore]);
@@ -288,16 +288,18 @@ export default function HomeScreen({ navigation }) {
     return addItem({ ...item, effective_price: promo > 0 && promo < price ? promo : price }, 1, item._restaurant);
   };
 
-  const recentDishes = useMemo(() => dishes
-    .filter((item) => isDishFeaturedForDay(item, menuDay, today))
+  const visibleMenuDishes = useMemo(() => dishes
+    .filter((item) => isDishFeaturedForDay(item, menuDay, today) && (!categoryMatcher || categoryMatcher.test(dishTypeText(item)))),
+    [dishes, menuDay, today, categoryMatcher]);
+
+  const recentDishes = useMemo(() => visibleMenuDishes
     .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || item.published_at || '') || 0 }))
     .sort((a, b) => b.date - a.date || a.index - b.index)
     .slice(0, 3)
-    .map(({ item }) => item), [dishes, menuDay, today]);
+    .map(({ item }) => item), [visibleMenuDishes]);
 
   const popularDishes = useMemo(() => {
-    const sorted = dishes
-    .filter((item) => isDishFeaturedForDay(item, menuDay, today) && (!categoryMatcher || categoryMatcher.test(dishTypeText(item))))
+    const sorted = visibleMenuDishes
     .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || '') || 0 }))
     .sort((a, b) => Number(!!b.item.is_featured) - Number(!!a.item.is_featured) || b.date - a.date || a.index - b.index)
     .map(({ item }) => item);
@@ -309,11 +311,11 @@ export default function HomeScreen({ navigation }) {
       return true;
     }).slice(0, 4);
     return [...first, ...sorted.filter((item) => !first.includes(item))];
-  }, [dishes, menuDay, today, categoryMatcher]);
+  }, [visibleMenuDishes]);
 
   const recentRestaurants = useMemo(() => {
     const latestMenuDate = new Map();
-    dishes.filter((dish) => isDishFeaturedForDay(dish, menuDay, today)).forEach((dish) => {
+    visibleMenuDishes.forEach((dish) => {
       const restaurantId = dish._restaurant?.id;
       if (!restaurantId) return;
       const date = Date.parse(dish.created_at || dish.createdAt || dish.published_at || dish.updated_at || '') || 0;
@@ -321,14 +323,13 @@ export default function HomeScreen({ navigation }) {
     });
     return restaurants
       .filter((restaurant) => latestMenuDate.has(restaurant.id))
-      .filter((restaurant) => !categoryMatcher || dishes.some((dish) => dish._restaurant?.id === restaurant.id && isDishFeaturedForDay(dish, menuDay, today) && categoryMatcher.test(dishTypeText(dish))))
       .map((restaurant) => ({ restaurant, date: latestMenuDate.get(restaurant.id) || Date.parse(restaurant.updated_at || '') || 0 }))
       .sort((a, b) => b.date - a.date || Number(b.restaurant.id) - Number(a.restaurant.id))
       .slice(0, 3)
       .map(({ restaurant }) => restaurant);
-  }, [restaurants, dishes, categoryMatcher, menuDay, today]);
+  }, [restaurants, visibleMenuDishes]);
 
-  const promoDish = useMemo(() => dishes.find((dish) => isDishFeaturedForDay(dish, menuDay, today) && Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [dishes, menuDay, today]);
+  const promoDish = useMemo(() => visibleMenuDishes.find((dish) => Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [visibleMenuDishes]);
   const promoPercent = promoDish ? Math.round((1 - Number(promoDish.discount_price) / Number(promoDish.price)) * 100) : 0;
 
   useDerivedValue(() => {
@@ -465,7 +466,7 @@ export default function HomeScreen({ navigation }) {
             </View>
             {(remoteSearching || loadingMore) && <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 12 }} />}
             {searchRestaurants.length > 0 && <><SectionHeader title={`Restaurants (${searchRestaurants.length})`} /><View style={styles.listPad}>{searchRestaurants.map(({ r, matches }) => <View key={`r${r.id}`}><NearbyRow restaurant={r} onPress={() => openRestaurant(r)} />{matches > 0 && <Text style={styles.matchHint}>{matches} plat{matches > 1 ? 's' : ''} correspondant à « {search.trim()} »</Text>}</View>)}</View></>}
-            {searchDishes.length > 0 && <><SectionHeader title={`Plats (${searchDishes.length})`} style={{ marginTop: 12 }} /><View style={styles.listPad}>{searchDishes.map((dish, index) => <DishRow key={`d${dish.id}-${index}`} item={dish} day={menuDay} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View></>}
+            {searchDishes.length > 0 && <><SectionHeader title={`Plats (${searchDishes.length})`} style={{ marginTop: 12 }} /><View style={styles.listPad}>{searchDishes.map((dish, index) => <DishRow key={`d${dish.id}-${index}`} item={dish} day={today} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View></>}
             {!remoteSearching && !loadingMore && (q.length < 2 || !hasMore) && searchRestaurants.length === 0 && searchDishes.length === 0 && <EmptyState icon="search" title="Aucun résultat" message={`Rien ne correspond à « ${search.trim()} ». Essayez un autre mot.`} actionLabel="Effacer la recherche" onAction={() => setSearch('')} />}
           </View>
         ) : (
@@ -490,6 +491,7 @@ export default function HomeScreen({ navigation }) {
             {recentRestaurants.length > 0 ? (
               <>
                 <FlatList
+                  key={`${menuDay.key}-${activeCat || 'all'}`}
                   data={recentRestaurants}
                   horizontal
                   pagingEnabled
