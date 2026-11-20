@@ -12,6 +12,7 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
+import useMenuDay, { isDishOrderableToday, isDishServedToday } from '../../hooks/useMenuDay';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = 205;
@@ -126,7 +127,6 @@ function parseOpeningHours(raw) {
   });
   return rows;
 }
-const TODAY_KEY = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
 // « 23:00 » → « 23h », « 22:30 » → « 22h30 »
 const hourLabel = (hhmm) => {
   if (!hhmm) return null;
@@ -213,16 +213,16 @@ function CategoryTile({ label, icon, active, onPress }) {
 }
 
 // ── Carte de plat (grille 2 colonnes) ──
-function DishCard({ item, liked, onLike, onPress, onAdd }) {
+function DishCard({ item, liked, onLike, onPress, onAdd, day }) {
   const { price, effective, hasPromo, percent } = pricing(item);
   const desc = clean(item.description);
-  const unavailable = item.is_available === false;
+  const unavailable = !isDishOrderableToday(item, day);
 
   return (
     <TouchableOpacity style={styles.dishCard} onPress={() => onPress(item)} activeOpacity={0.9}>
       <SmartImage uri={item.image} fallbackSource={dishFallbackImage(item)} style={styles.dishImage} iconSize={30}>
         {unavailable ? (
-          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText}>Indisponible</Text></View>
+          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText}>{isDishServedToday(item, day) ? 'Indisponible' : `Pas ce ${day.label}`}</Text></View>
         ) : null}
         {hasPromo ? (
           <View style={[styles.dishTag, { backgroundColor: COLORS.success }]}>
@@ -255,6 +255,7 @@ function DishCard({ item, liked, onLike, onPress, onAdd }) {
 }
 
 export default function RestaurantScreen({ route, navigation }) {
+  const menuDay = useMenuDay();
   const { restaurant: routeRestaurant } = route.params;
   const { addItem, totalItems, subtotal } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -310,7 +311,7 @@ export default function RestaurantScreen({ route, navigation }) {
     }
   }, [routeRestaurant.id]);
 
-  useEffect(() => { loadMenu(); }, []);
+  useEffect(() => { loadMenu(); }, [loadMenu, menuDay.key]);
   const onRefresh = () => { setRefreshing(true); loadMenu(); };
 
   // Les catégories sans plat ne sont jamais affichées
@@ -319,8 +320,9 @@ export default function RestaurantScreen({ route, navigation }) {
     [categories]
   );
   const allItems = useMemo(() => visibleCategories.flatMap(c => c.items), [visibleCategories]);
-  const heroDish = allItems.find((item) => item.is_featured && item.image) || allItems.find((item) => item.image);
-  const promoItems = useMemo(() => allItems.filter(i => pricing(i).hasPromo), [allItems]);
+  const todayItems = useMemo(() => allItems.filter((item) => isDishOrderableToday(item, menuDay)), [allItems, menuDay]);
+  const heroDish = todayItems.find((item) => item.is_featured && item.image) || todayItems.find((item) => item.image);
+  const promoItems = useMemo(() => todayItems.filter(i => pricing(i).hasPromo), [todayItems]);
   const maxPercent = promoItems.reduce((m, i) => Math.max(m, pricing(i).percent), 0);
 
   // Filtre courant (retombe sur « Tous » si la catégorie n'existe plus)
@@ -328,27 +330,28 @@ export default function RestaurantScreen({ route, navigation }) {
   const activeFilter = filter === 'promos' ? (promoItems.length ? 'promos' : 'all') : (currentCategory ? filter : 'all');
 
   const popularSorted = useMemo(
-    () => [...allItems].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)),
-    [allItems]
+    () => [...todayItems].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)),
+    [todayItems]
   );
+  const allSorted = useMemo(() => [...popularSorted, ...allItems.filter((item) => !isDishOrderableToday(item, menuDay))], [popularSorted, allItems, menuDay]);
   const query = clean(search).toLocaleLowerCase('fr');
   let gridItems; let sectionTitle;
   if (activeFilter === 'promos') { gridItems = promoItems; sectionTitle = 'Promotions'; }
   else if (activeFilter === 'all') {
-    gridItems = query || showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
-    sectionTitle = allItems.some((item) => item.is_featured) ? 'Nos plats populaires' : 'Tous les plats';
-  } else { gridItems = currentCategory.items; sectionTitle = labelize(currentCategory.name); }
+    gridItems = query || showAll ? allSorted : popularSorted.slice(0, POPULAR_LIMIT);
+    sectionTitle = query || showAll ? 'Tous les plats' : `À découvrir ce ${menuDay.label}`;
+  } else { gridItems = [...currentCategory.items].sort((a, b) => Number(isDishOrderableToday(b, menuDay)) - Number(isDishOrderableToday(a, menuDay))); sectionTitle = labelize(currentCategory.name); }
   if (query) {
     gridItems = gridItems.filter((item) => `${item.name || ''} ${item.description || ''} ${visibleCategories.find((category) => category.id === item.menu_category_id)?.name || ''}`.toLocaleLowerCase('fr').includes(query));
     sectionTitle = 'Résultats dans ce restaurant';
   }
-  const canExpand = !query && activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
+  const canExpand = !query && activeFilter === 'all' && allItems.length > Math.min(POPULAR_LIMIT, popularSorted.length);
 
   const isOpen = !!restaurant.is_open;
   const hasOpenStatus = restaurant.is_open != null;
   const photos = Array.isArray(restaurant.photos) ? restaurant.photos : [];
   const hours = useMemo(() => parseOpeningHours(restaurant.opening_hours), [restaurant.opening_hours]);
-  const todayHours = hours.find(h => h.key === TODAY_KEY);
+  const todayHours = hours.find(h => h.key === menuDay.key);
   const closeLabel = hourLabel(todayHours?.close);
   const addressLine = [clean(restaurant.address), clean(restaurant.city)].filter(Boolean).join(', ');
   const hasPracticalInfo = addressLine || restaurant.phone || hours.length > 0 || Number(restaurant.minimum_order) > 0;
@@ -361,6 +364,7 @@ export default function RestaurantScreen({ route, navigation }) {
 
   // Ajout rapide : pas de connexion exigée (panier invité, connexion demandée au paiement)
   const handleAdd = async (item) => {
+    if (!isDishOrderableToday(item, menuDay)) { toast.show(`Ce plat n’est pas au menu ce ${menuDay.label}`); return false; }
     // Un plat avec options obligatoires doit passer par la fiche pour les choisir
     const needsChoice = (item.option_groups || []).some(g => g.is_required);
     if (needsChoice) { openItem(item); return false; }
@@ -464,17 +468,18 @@ export default function RestaurantScreen({ route, navigation }) {
             <DishCard
               key={item.id}
               item={item}
+              day={menuDay}
               liked={isFavorite('item', item.id)}
               onLike={onLikeItem}
               onPress={openItem}
               onAdd={handleAdd}
             />
           ))}
-        </View> : <EmptyState icon="search-outline" title="Aucun plat trouvé" message={query ? `Aucun plat ne correspond à « ${clean(search)} » dans ce restaurant.` : 'Aucun plat dans cette catégorie pour le moment.'} actionLabel={query ? 'Effacer la recherche' : undefined} onAction={() => setSearch('')} />}
+        </View> : <EmptyState icon="search-outline" title={query ? 'Aucun plat trouvé' : 'Aucun plat aujourd’hui'} message={query ? `Aucun plat ne correspond à « ${clean(search)} » dans ce restaurant.` : `Ce restaurant n’a pas de plat disponible ce ${menuDay.label}. Vous pouvez consulter son menu complet.`} actionLabel={query ? 'Effacer la recherche' : canExpand ? 'Voir le menu complet' : undefined} onAction={() => query ? setSearch('') : setShowAll(true)} />}
 
         {canExpand && !showAll ? (
           <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAll(true)} activeOpacity={0.85}>
-            <Text style={styles.moreBtnText}>Voir les {popularSorted.length} plats</Text>
+            <Text style={styles.moreBtnText}>Voir les {allItems.length} plats</Text>
             <Ionicons name="chevron-down" size={16} color={COLORS.primary} />
           </TouchableOpacity>
         ) : null}
@@ -665,8 +670,8 @@ export default function RestaurantScreen({ route, navigation }) {
                   <View style={styles.hoursList}>
                     {hours.map(h => (
                       <View key={h.key} style={styles.hoursRow}>
-                        <Text style={[styles.hoursDay, h.key === TODAY_KEY && styles.hoursToday]}>{h.label}</Text>
-                        <Text style={[styles.hoursValue, h.key === TODAY_KEY && styles.hoursToday]}>{h.value}</Text>
+                        <Text style={[styles.hoursDay, h.key === menuDay.key && styles.hoursToday]}>{h.label}</Text>
+                        <Text style={[styles.hoursValue, h.key === menuDay.key && styles.hoursToday]}>{h.value}</Text>
                       </View>
                     ))}
                   </View>
@@ -866,7 +871,7 @@ const styles = StyleSheet.create({
   openSub: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 12, color: COLORS.textMuted },
 
   restaurantSearchRow: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 8, backgroundColor: '#FFF8F3' },
-  restaurantSearch: { height: 43, borderRadius: 23, borderWidth: 0, backgroundColor: COLORS.white, ...SHADOWS.sm },
+  restaurantSearch: { height: 48, borderRadius: 25, borderWidth: 1, borderColor: '#F4D8C7', backgroundColor: COLORS.white, ...SHADOWS.sm },
 
   // ── Tuiles catégories ──
   stickyWrap: { backgroundColor: '#FFF8F3', zIndex: 2 },

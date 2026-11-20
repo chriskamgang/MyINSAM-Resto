@@ -13,6 +13,7 @@ import { restaurantService } from '../../services/restaurantService';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, Badge, SmartImage, QuantityStepper } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
+import useMenuDay, { isDishOrderableToday, isDishServedToday } from '../../hooks/useMenuDay';
 
 const { width, height } = Dimensions.get('window');
 const HEADER_H = Math.max(420, Math.min(Math.round(height * 0.68), 680));
@@ -229,6 +230,7 @@ function SuggestionCard({ dish, liked, onLike, onPress, onAdd }) {
 }
 
 export default function ItemDetailScreen({ route, navigation }) {
+  const menuDay = useMenuDay();
   const { item, restaurant } = route.params;
   const { addItem, items } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -297,9 +299,9 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   const itemName = clean(item.name);
   const description = clean(item.description);
-  const isAvailable = item.is_available !== false && item.is_available !== 0;
+  const isAvailable = isDishOrderableToday(item, menuDay);
   const hint = availabilityHint(description);
-  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : 'Indisponible';
+  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : isDishServedToday(item, menuDay) ? 'Indisponible' : `Pas au menu ce ${menuDay.label}`;
 
   // Restaurant
   const restoRating = Number(restaurant?.rating) || 0;

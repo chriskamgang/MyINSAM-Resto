@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: FONTS.extrabold, fontSize: 24, lineHeight: 29, color: COLORS.white, marginTop: 17 },
   headerSub: { fontFamily: FONTS.medium, fontSize: 11, color: '#FFE8D3', marginTop: 2 },
   searchWrap: { marginHorizontal: SCREEN_PADDING, marginTop: -17, zIndex: 2, ...{ elevation: 3 } },
-  search: { height: 46, borderRadius: 24, borderWidth: 0, backgroundColor: COLORS.white },
+  search: { height: 48, borderRadius: 25, borderWidth: 1, borderColor: '#F4D8C7', backgroundColor: COLORS.white },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SCREEN_PADDING, marginTop: 16, marginBottom: 10 },
   sectionMark: { width: 5, height: 20, borderRadius: 3, backgroundColor: COLORS.primary, marginRight: 8 },
   sectionTitle: { flex: 1, fontFamily: FONTS.bold, fontSize: 16, color: '#171C2D' },
