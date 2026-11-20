@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ScrollView, RefreshControl, TouchableOpacity,
 } from 'react-native';
@@ -96,13 +96,18 @@ export default function OrdersScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]           = useState(false);
   const [filter, setFilter]         = useState('all');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const loadOrders = useCallback(async () => {
     try {
-      const data = await orderService.getOrders();
+      const data = await orderService.getOrders(1);
       // La réponse est paginée: { data: [...], total, ... }
       const list = Array.isArray(data) ? data : (data?.data || []);
       setOrders(list);
+      setPage(1);
+      setHasMore(Boolean(data?.next_page_url || (data?.last_page && Number(data.current_page) < Number(data.last_page))));
       setError(false);
     } catch (e) {
       console.error('Erreur commandes:', e);
@@ -112,6 +117,24 @@ export default function OrdersScreen({ navigation }) {
       setRefreshing(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loading || refreshing || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await orderService.getOrders(nextPage);
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setOrders((previous) => [...previous, ...list.filter((order) => !previous.some((old) => old.id === order.id))]);
+      setPage(nextPage);
+      setHasMore(Boolean(data?.next_page_url || (data?.last_page && Number(data.current_page) < Number(data.last_page))));
+    } catch (e) {
+      console.error('Erreur pagination commandes:', e);
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, refreshing, loadingMore, hasMore, page]);
 
   useFocusEffect(useCallback(() => { loadOrders(); }, [loadOrders]));
 
@@ -127,6 +150,10 @@ export default function OrdersScreen({ navigation }) {
     const f = FILTERS.find(x => x.key === filter) || FILTERS[0];
     return orders.filter(f.match);
   }, [orders, filter]);
+
+  useEffect(() => {
+    if (filter !== 'all' && !loading && visible.length === 0 && hasMore) loadMore();
+  }, [filter, loading, visible.length, hasMore, loadMore]);
 
   if (loading) {
     return <Screen><LoadingView label="Chargement de vos commandes…" /></Screen>;
@@ -161,7 +188,7 @@ export default function OrdersScreen({ navigation }) {
       <EmptyState
         icon="filter-outline"
         title="Aucune commande ici"
-        message="Aucune commande ne correspond à ce filtre."
+        message={hasMore ? 'Faites défiler pour voir les autres commandes.' : 'Aucune commande ne correspond à ce filtre.'}
       />
     );
   };
@@ -196,6 +223,9 @@ export default function OrdersScreen({ navigation }) {
 
       <FlatList
         data={visible}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.35}
+        ListFooterComponent={loadingMore ? <LoadingView label="Chargement des commandes…" /> : null}
         keyExtractor={item => String(item.id)}
         renderItem={({ item }) => (
           <OrderCard

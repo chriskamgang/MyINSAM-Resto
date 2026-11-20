@@ -184,13 +184,23 @@ export default function HomeScreen({ navigation }) {
     if (reset) loadedMenus.current = new Set();
     const todo = list.filter((r) => !loadedMenus.current.has(r.id));
     todo.forEach((r) => loadedMenus.current.add(r.id));
-    const menus = await Promise.all(todo.map(async (r) => {
-      try {
-        const data = await restaurantService.getMenu(r.id);
-        return (data.menu || []).flatMap((cat) => (cat.items || []).map((it) => ({ ...it, _restaurant: r, _menuCategory: cat.name })));
-      } catch { return []; }
-    }));
-    setDishes((prev) => (reset ? menus.flat() : [...prev, ...menus.flat()]));
+    const menus = [];
+    // Limite les requêtes simultanées quand une recherche parcourt plusieurs restaurants.
+    for (let offset = 0; offset < todo.length; offset += 4) {
+      const batch = await Promise.all(todo.slice(offset, offset + 4).map(async (r) => {
+        try {
+          const data = await restaurantService.getMenu(r.id);
+          return (data.menu || []).flatMap((cat) => (cat.items || []).map((it) => ({ ...it, _restaurant: r, _menuCategory: cat.name })));
+        } catch { return []; }
+      }));
+      menus.push(...batch);
+    }
+    setDishes((prev) => {
+      const next = reset ? menus.flat() : [...prev, ...menus.flat()];
+      const signature = (item) => `${item._restaurant?.id}:${item.id}:${item.updated_at}:${item.is_available}:${item.effective_price ?? item.price}:${JSON.stringify(item.available_days)}`;
+      if (next.length === prev.length && next.every((item, index) => signature(item) === signature(prev[index]))) return prev;
+      return next;
+    });
   }, []);
 
   const loadData = useCallback(async () => {
@@ -218,7 +228,7 @@ export default function HomeScreen({ navigation }) {
     return () => clearInterval(timer);
   }, [isFocused, loadData, today.key]);
 
-  // Pagination : charge la page suivante quand on arrive en bas de la liste
+  // Les autres pages sont chargées seulement lorsqu'une recherche ou un filtre le demande.
   const loadMore = useCallback(async () => {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
@@ -240,8 +250,8 @@ export default function HomeScreen({ navigation }) {
   const categoryMatcher = FOOD_CATEGORIES.find((c) => c.id === activeCat)?.matcher;
   const selectCategory = (id) => { setActiveCat(id === 'all' ? null : id); setFeatureIndex(0); setShowAllPopular(false); };
   useEffect(() => {
-    if (!loading && hasMore && !loadingMore) loadMore();
-  }, [loading, hasMore, loadingMore, loadMore]);
+    if ((q.length >= 2 || activeCat) && !loading && hasMore && !loadingMore) loadMore();
+  }, [q, activeCat, loading, hasMore, loadingMore, loadMore]);
   useEffect(() => {
     setRemoteRestaurants([]);
     if (q.length < 2) { setRemoteSearching(false); return undefined; }

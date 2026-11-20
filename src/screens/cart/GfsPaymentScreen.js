@@ -16,8 +16,8 @@ const RETURN_URL = 'com.chrisdev237.myinsamresto1://payment/gfs';
 export const GFS_COLOR = '#0E5A8A';
 
 export default function GfsPaymentScreen({ route, navigation }) {
-  const { order, deliveryMinutes } = route.params;
-  const { clearCart } = useCart();
+  const { order, deliveryMinutes, restaurantId } = route.params;
+  const { clearCart, clearRestaurant } = useCart();
   const insets = useSafeAreaInsets();
 
   const [payment, setPayment] = useState(null);
@@ -35,7 +35,7 @@ export default function GfsPaymentScreen({ route, navigation }) {
       const s = String(res.payment.status).toLowerCase();
       if (s === 'completed') {
         clearInterval(poll.current);
-        clearCart();
+        restaurantId ? clearRestaurant(restaurantId) : clearCart();
         setStatus('completed');
       } else if (s === 'failed' || s === 'cancelled') {
         clearInterval(poll.current);
@@ -46,7 +46,7 @@ export default function GfsPaymentScreen({ route, navigation }) {
     } finally {
       setChecking(false);
     }
-  }, [payment, clearCart]);
+  }, [payment, clearCart, clearRestaurant, restaurantId]);
 
   const openPaymentPage = useCallback(async (p = payment) => {
     if (!p?.payment_url) return;

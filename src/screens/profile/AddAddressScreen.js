@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator,
@@ -76,7 +77,7 @@ export default function AddAddressScreen({ route, navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission refusée', 'Autorisez la localisation dans les paramètres.');
+        showAlert('Permission refusée', 'Autorisez la localisation dans les paramètres.');
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -90,7 +91,7 @@ export default function AddAddressScreen({ route, navigation }) {
       setSearchQuery('');
       setSearchResults([]);
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible d\'obtenir votre position.');
+      showAlert('Erreur', 'Impossible d\'obtenir votre position.');
     } finally {
       setLocating(false);
     }
@@ -110,10 +111,10 @@ export default function AddAddressScreen({ route, navigation }) {
       const data = await res.json();
       setSearchResults(Array.isArray(data) ? data : []);
       if (Array.isArray(data) && data.length === 0) {
-        Alert.alert('Aucun résultat', 'Essayez avec un quartier ou un repère proche.');
+        showAlert('Aucun résultat', 'Essayez avec un quartier ou un repère proche.');
       }
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de rechercher cette adresse.');
+      showAlert('Erreur', 'Impossible de rechercher cette adresse.');
     } finally {
       setSearching(false);
     }
@@ -164,7 +165,7 @@ export default function AddAddressScreen({ route, navigation }) {
       if (onSave) onSave(savedAddress);
       navigation.goBack();
     } catch (e) {
-      Alert.alert(
+      showAlert(
         'Erreur',
         e.response?.data?.message || (isEdit ? 'Impossible de modifier l\'adresse.' : 'Impossible d\'ajouter l\'adresse.')
       );

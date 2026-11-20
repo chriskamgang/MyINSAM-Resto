@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ScrollView, RefreshControl, Alert,
@@ -74,7 +75,7 @@ export default function RestoOrdersScreen({ navigation }) {
   }, [loadOrders]));
 
   const runAction = (order, action) => {
-    Alert.alert('Confirmer', action.confirm, [
+    showAlert('Confirmer', action.confirm, [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Confirmer',
@@ -85,7 +86,7 @@ export default function RestoOrdersScreen({ navigation }) {
             await restoDashboardService.updateOrderStatus(order.id, action.status);
             await loadOrders();
           } catch (e) {
-            Alert.alert('Erreur', e.response?.data?.message || 'Impossible de modifier le statut.');
+            showAlert('Erreur', e.response?.data?.message || 'Impossible de modifier le statut.');
           } finally {
             setActingId(null);
           }

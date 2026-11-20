@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Alert, RefreshControl, Modal,
@@ -138,7 +139,7 @@ export default function OrderDetailScreen({ route, navigation }) {
       setOrder(data);
     } catch (e) {
       if (!silent) {
-        Alert.alert('Erreur', 'Impossible de charger la commande.');
+        showAlert('Erreur', 'Impossible de charger la commande.');
         navigation.goBack();
       }
     } finally {
@@ -158,7 +159,7 @@ export default function OrderDetailScreen({ route, navigation }) {
   const onRefresh = () => { setRefreshing(true); loadOrder(true); };
 
   const handleCancel = () => {
-    Alert.alert(
+    showAlert(
       'Annuler la commande',
       'Voulez-vous vraiment annuler cette commande ?',
       [
@@ -171,7 +172,7 @@ export default function OrderDetailScreen({ route, navigation }) {
               await orderService.cancelOrder(orderId);
               loadOrder(true);
             } catch (e) {
-              Alert.alert('Erreur', e.response?.data?.message || 'Impossible d\'annuler la commande.');
+              showAlert('Erreur', e.response?.data?.message || 'Impossible d\'annuler la commande.');
             } finally {
               setCancelling(false);
             }
@@ -187,9 +188,9 @@ export default function OrderDetailScreen({ route, navigation }) {
       const res = await orderService.rateOrder(orderId, restaurantRating, driverRating, comment);
       setRated(true);
       setRatingOpen(false);
-      Alert.alert('Merci !', res?.message || 'Merci pour votre avis !');
+      showAlert('Merci !', res?.message || 'Merci pour votre avis !');
     } catch (e) {
-      Alert.alert('Erreur', e.response?.data?.message || 'Impossible d\'envoyer votre avis.');
+      showAlert('Erreur', e.response?.data?.message || 'Impossible d\'envoyer votre avis.');
     } finally {
       setRatingBusy(false);
     }

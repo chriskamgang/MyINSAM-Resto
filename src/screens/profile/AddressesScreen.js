@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl,
@@ -55,7 +56,7 @@ export default function AddressesScreen({ navigation }) {
   const goEdit = (address) => navigation.navigate('AddAddress', { address });
 
   const handleDelete = (id) => {
-    Alert.alert(
+    showAlert(
       'Supprimer l\'adresse',
       'Voulez-vous vraiment supprimer cette adresse ?',
       [
@@ -69,7 +70,7 @@ export default function AddressesScreen({ navigation }) {
               // L'adresse supprimée ne doit plus rester l'adresse de livraison active
               if (location?.addressId === id) setLocation(null);
             } catch (e) {
-              Alert.alert('Erreur', 'Impossible de supprimer l\'adresse.');
+              showAlert('Erreur', 'Impossible de supprimer l\'adresse.');
             }
           },
         },
@@ -82,7 +83,7 @@ export default function AddressesScreen({ navigation }) {
       await profileService.setDefaultAddress(id);
       setAddresses(prev => prev.map(a => ({ ...a, is_default: a.id === id })));
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de définir l\'adresse par défaut.');
+      showAlert('Erreur', 'Impossible de définir l\'adresse par défaut.');
     }
   };
 

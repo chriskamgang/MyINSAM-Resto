@@ -1,133 +1,76 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Alert } from 'react-native';
 import { orderService } from '../services/orderService';
 
 const CartContext = createContext({});
-
-// Clé d'une ligne du panier : un même plat avec des options différentes = deux lignes
-const lineKey = (item) => {
-  const opts = item.selected_options && Object.keys(item.selected_options).length
-    ? JSON.stringify(item.selected_options) : '';
-  return `${item.id}|${opts}`;
-};
+const lineKey = (item, restaurantId) => `${restaurantId}|${item.id}|${item.selected_options && Object.keys(item.selected_options).length ? JSON.stringify(item.selected_options) : ''}`;
+const priceOf = (item) => (Number(item.effective_price ?? item.price) || 0) * item.quantity;
 
 export const CartProvider = ({ children }) => {
-  const [items, setItems]               = useState([]);
-  const [restaurant, setRestaurant]     = useState(null); // restaurant actuel du panier
-  const [coupon, setCoupon]             = useState(null);
-  const [discount, setDiscount]         = useState(0);
+  const [items, setItems] = useState([]);
+  const [coupon, setCoupon] = useState(null);
+  const [couponRestaurantId, setCouponRestaurantId] = useState(null);
+  const [discount, setDiscount] = useState(0);
 
-  // Ajouter un article (vérifie que c'est le même restaurant)
   const addItem = useCallback((item, quantity = 1, itemRestaurant = null) => {
-    // Si un restaurant est fourni et qu'il diffère du panier actuel
-    if (itemRestaurant && restaurant && itemRestaurant.id !== restaurant.id) {
-      return new Promise((resolve) => {
-        Alert.alert(
-          'Changer de restaurant ?',
-          `Votre panier contient des articles de "${restaurant.name}". Voulez-vous vider le panier et commander chez "${itemRestaurant.name}" ?`,
-          [
-            { text: 'Annuler', style: 'cancel', onPress: () => resolve(false) },
-            {
-              text: 'Vider et ajouter',
-              style: 'destructive',
-              onPress: () => {
-                setItems([{ ...item, cart_key: lineKey(item), quantity }]);
-                setRestaurant(itemRestaurant);
-                setCoupon(null);
-                setDiscount(0);
-                resolve(true);
-              },
-            },
-          ]
-        );
-      });
-    }
-
-    // Mettre à jour le restaurant si pas encore défini
-    if (itemRestaurant && !restaurant) {
-      setRestaurant(itemRestaurant);
-    }
-
-    const key = item.cart_key || lineKey(item);
-    setItems(prev => {
-      const existing = prev.find(i => i.cart_key === key);
-      if (existing) {
-        return prev.map(i => i.cart_key === key ? { ...i, quantity: i.quantity + quantity } : i);
-      }
-      return [...prev, { ...item, cart_key: key, quantity }];
+    const restaurant = itemRestaurant || item._cartRestaurant || item._restaurant;
+    const restaurantId = restaurant?.id ?? item.restaurant_id;
+    if (!restaurantId) return Promise.resolve(false);
+    const key = lineKey(item, restaurantId);
+    setItems((previous) => {
+      const existing = previous.find((entry) => entry.cart_key === key);
+      if (existing) return previous.map((entry) => entry.cart_key === key ? { ...entry, quantity: entry.quantity + quantity } : entry);
+      return [...previous, { ...item, _cartRestaurant: restaurant, cart_key: key, quantity }];
     });
     return Promise.resolve(true);
-  }, [restaurant]);
-
-  // Décrémenter ou supprimer
-  const matches = (i, keyOrId) => i.cart_key === keyOrId || (typeof keyOrId === 'number' && i.id === keyOrId);
-
-  const removeItem = useCallback((keyOrId) => {
-    setItems(prev => {
-      const existing = prev.find(i => matches(i, keyOrId));
-      if (existing?.quantity > 1) {
-        return prev.map(i => i === existing ? { ...i, quantity: i.quantity - 1 } : i);
-      }
-      const newItems = prev.filter(i => i !== existing);
-      if (newItems.length === 0) setRestaurant(null);
-      return newItems;
-    });
   }, []);
 
-  // Supprimer complètement
-  const deleteItem = useCallback((keyOrId) => {
-    setItems(prev => {
-      const newItems = prev.filter(i => !matches(i, keyOrId));
-      if (newItems.length === 0) setRestaurant(null);
-      return newItems;
-    });
+  const matches = (item, keyOrId) => item.cart_key === keyOrId || (typeof keyOrId === 'number' && item.id === keyOrId);
+  const removeItem = useCallback((keyOrId) => setItems((previous) => {
+    const item = previous.find((entry) => matches(entry, keyOrId));
+    if (!item) return previous;
+    return item.quantity > 1
+      ? previous.map((entry) => entry === item ? { ...entry, quantity: entry.quantity - 1 } : entry)
+      : previous.filter((entry) => entry !== item);
+  }), []);
+  const deleteItem = useCallback((keyOrId) => setItems((previous) => previous.filter((entry) => !matches(entry, keyOrId))), []);
+  const clearCart = useCallback(() => { setItems([]); setCoupon(null); setCouponRestaurantId(null); setDiscount(0); }, []);
+  const clearRestaurant = useCallback((restaurantId) => {
+    setItems((previous) => previous.filter((entry) => String(entry._cartRestaurant?.id ?? entry.restaurant_id) !== String(restaurantId)));
+    setCoupon(null); setCouponRestaurantId(null); setDiscount(0);
   }, []);
 
-  // Vider le panier
-  const clearCart = useCallback(() => {
-    setItems([]);
-    setRestaurant(null);
-    setCoupon(null);
-    setDiscount(0);
-  }, []);
+  const groupMap = new Map();
+  items.forEach((item) => {
+    const restaurant = item._cartRestaurant || item._restaurant;
+    const id = String(restaurant?.id ?? item.restaurant_id);
+    if (!groupMap.has(id)) groupMap.set(id, { restaurant, items: [], subtotal: 0, deliveryFee: Number(restaurant?.delivery_fee ?? 500) });
+    const group = groupMap.get(id);
+    group.items.push(item);
+    group.subtotal += priceOf(item);
+  });
+  const groups = [...groupMap.values()];
+  const restaurant = groups[0]?.restaurant || null;
+  const subtotal = groups.reduce((sum, group) => sum + group.subtotal, 0);
+  const deliveryFee = groups.reduce((sum, group) => sum + (coupon?.type === 'free_delivery' && String(group.restaurant?.id) === String(couponRestaurantId) ? 0 : group.deliveryFee), 0);
+  const total = Math.max(0, subtotal + deliveryFee - discount);
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  const subtotal = items.reduce((sum, i) => sum + (Number(i.effective_price ?? i.price) || 0) * i.quantity, 0);
-
-  // Un coupon validé pour un ancien montant doit être revalidé si le panier change.
-  useEffect(() => {
-    setCoupon(null);
-    setDiscount(0);
-  }, [items]);
-
-  // Appliquer un coupon
-  const applyCoupon = useCallback(async (code) => {
-    const restaurantId = restaurant?.id || 1;
-    const data = await orderService.validateCoupon(code, subtotal, restaurantId);
+  useEffect(() => { setCoupon(null); setCouponRestaurantId(null); setDiscount(0); }, [items]);
+  const applyCoupon = useCallback(async (code, restaurantId) => {
+    const group = groups.find((entry) => String(entry.restaurant?.id) === String(restaurantId));
+    if (!group) throw new Error('Choisissez un restaurant pour ce code promo.');
+    const data = await orderService.validateCoupon(code, group.subtotal, group.restaurant.id);
     setCoupon(data.coupon);
-    setDiscount(Number(data.discount ?? data.discount_amount) || 0); // le serveur renvoie « discount »
+    setCouponRestaurantId(group.restaurant.id);
+    setDiscount(Number(data.discount ?? data.discount_amount) || 0);
     return data;
-  }, [restaurant, subtotal]);
+  }, [groups]);
+  const removeCoupon = useCallback(() => { setCoupon(null); setCouponRestaurantId(null); setDiscount(0); }, []);
 
-  const removeCoupon = useCallback(() => {
-    setCoupon(null);
-    setDiscount(0);
-  }, []);
-
-  // Calculs
-  const deliveryFee = subtotal > 0 ? (coupon?.type === 'free_delivery' ? 0 : Number(restaurant?.delivery_fee ?? 500)) : 0;
-  const total       = Math.max(0, subtotal + deliveryFee - discount);
-  const totalItems  = items.reduce((sum, i) => sum + i.quantity, 0);
-
-  return (
-    <CartContext.Provider value={{
-      items, subtotal, deliveryFee, discount, total, totalItems,
-      coupon, restaurant,
-      addItem, removeItem, deleteItem, clearCart,
-      applyCoupon, removeCoupon,
-    }}>
-      {children}
-    </CartContext.Provider>
-  );
+  return <CartContext.Provider value={{ items, groups, restaurant, subtotal, deliveryFee, discount, total, totalItems,
+    coupon, couponRestaurantId, addItem, removeItem, deleteItem, clearCart, clearRestaurant, applyCoupon, removeCoupon }}>
+    {children}
+  </CartContext.Provider>;
 };
 
 export const useCart = () => useContext(CartContext);

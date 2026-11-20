@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Platform,
@@ -13,10 +14,9 @@ import { COLORS, FONTS, TYPE, SHADOWS, SCREEN_PADDING } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 
 const EXTRA = Constants.expoConfig?.extra || {};
-// app.json contient encore des URL d'exemple (votresite.com) : on retombe alors sur les pages du site.
-const pickUrl = (value, fallback) => (value && !/votresite\.com/.test(value) ? value : fallback);
-const PRIVACY_URL = pickUrl(EXTRA.privacyPolicyUrl, 'https://restaurant.iues-insambot.com/privacy-policy');
-const TERMS_URL = pickUrl(EXTRA.termsOfServiceUrl, 'https://restaurant.iues-insambot.com/terms-of-service');
+// Les liens ne sont ouverts que lorsqu'une page Estuaire Eat est configurée.
+const PRIVACY_URL = EXTRA.privacyPolicyUrl;
+const TERMS_URL = EXTRA.termsOfServiceUrl;
 const SUPPORT_PHONE = (EXTRA.supportPhone || '+237659339778').replace(/\D/g, '');
 const SUPPORT_EMAIL = EXTRA.supportEmail || 'support@myinsam.cm';
 const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
@@ -26,7 +26,8 @@ const BUILD = Platform.OS === 'ios'
 const ANDROID_PACKAGE = Constants.expoConfig?.android?.package;
 
 function openUrl(url) {
-  Linking.openURL(url).catch(() => Alert.alert('Erreur', "Impossible d'ouvrir ce lien."));
+  if (!url) { showAlert('Document indisponible', 'Le document officiel Estuaire Eat sera ajouté dès sa publication. Contactez le support pour toute question.'); return; }
+  Linking.openURL(url).catch(() => showAlert('Erreur', "Impossible d'ouvrir ce lien."));
 }
 
 function Group({ title, children }) {
@@ -61,7 +62,7 @@ export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       'Déconnexion',
       'Voulez-vous vraiment vous déconnecter ?',
       [
@@ -72,7 +73,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showAlert(
       'Supprimer mon compte',
       'Cette action est irréversible. Toutes vos données seront supprimées définitivement. Voulez-vous continuer ?',
       [
@@ -80,7 +81,7 @@ export default function ProfileScreen({ navigation }) {
         {
           text: 'Supprimer', style: 'destructive',
           onPress: () => {
-            Alert.alert(
+            showAlert(
               'Confirmation finale',
               'Êtes-vous absolument certain ? Cette action ne peut pas être annulée.',
               [
@@ -92,7 +93,7 @@ export default function ProfileScreen({ navigation }) {
                       await profileService.deleteAccount();
                       await logout();
                     } catch (e) {
-                      Alert.alert('Erreur', e.response?.data?.message || 'Impossible de supprimer le compte.');
+                      showAlert('Erreur', e.response?.data?.message || 'Impossible de supprimer le compte.');
                     }
                   },
                 },
@@ -107,11 +108,11 @@ export default function ProfileScreen({ navigation }) {
   const contactWhatsApp = () => {
     const msg = encodeURIComponent("Bonjour, j'ai besoin d'aide avec l'application Estuaire Eat.");
     Linking.openURL(`https://wa.me/${SUPPORT_PHONE}?text=${msg}`)
-      .catch(() => Alert.alert('Support', `Contactez-nous au +${SUPPORT_PHONE}.`));
+      .catch(() => showAlert('Support', `Contactez-nous au +${SUPPORT_PHONE}.`));
   };
 
   const showAbout = () => {
-    Alert.alert(
+    showAlert(
       'Estuaire Eat',
       `Version ${APP_VERSION}${BUILD ? ` (${BUILD})` : ''}\nLivraison de repas à Bafoussam.`
     );

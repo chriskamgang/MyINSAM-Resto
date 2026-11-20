@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable,
@@ -294,7 +295,7 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   const allImages = getAllImages(item);
   const optionGroups = (item.option_groups || []).filter(g => (g.items || []).length > 0);
-  const inCart = items.find(i => i.id === item.id);
+  const inCart = items.find(i => i.id === item.id && String(i._cartRestaurant?.id) === String(restaurant?.id));
   const inCartQty = inCart?.quantity || 0;
 
   const itemName = clean(item.name);
@@ -359,7 +360,7 @@ export default function ItemDetailScreen({ route, navigation }) {
     if (!isAvailable || adding) return;
     for (const group of optionGroups) {
       if (group.is_required && (!selections[group.id] || selections[group.id].length === 0)) {
-        Alert.alert('Option requise', `Veuillez choisir : ${clean(group.name)}`);
+        showAlert('Option requise', `Veuillez choisir : ${clean(group.name)}`);
         return;
       }
     }
@@ -377,7 +378,7 @@ export default function ItemDetailScreen({ route, navigation }) {
     setAdding(mode);
     let added = true;
     try {
-      // addItem demande confirmation si le panier contient un autre restaurant
+      // Le panier regroupe les plats par restaurant.
       added = await addItem(
         { ...item, effective_price: totalUnitPrice, selected_options: selectedOptions },
         quantity,

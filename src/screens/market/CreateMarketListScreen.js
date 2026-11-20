@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
@@ -61,7 +62,7 @@ export default function CreateMarketListScreen({ navigation }) {
 
   const removeRow = (id) => {
     if (items.length === 1) {
-      Alert.alert('Info', 'Vous devez avoir au moins un article.');
+      showAlert('Info', 'Vous devez avoir au moins un article.');
       return;
     }
     setItems(prev => prev.filter(item => item.id !== id));
@@ -77,7 +78,7 @@ export default function CreateMarketListScreen({ navigation }) {
 
   const handleContinue = () => {
     if (!canContinue) {
-      Alert.alert('Liste vide', 'Ajoutez au moins un article avec un nom.');
+      showAlert('Liste vide', 'Ajoutez au moins un article avec un nom.');
       return;
     }
 

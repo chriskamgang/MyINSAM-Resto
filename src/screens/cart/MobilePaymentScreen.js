@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,8 +16,8 @@ const OPERATORS = {
 };
 
 export default function MobilePaymentScreen({ route, navigation }) {
-  const { order, paymentMethod, deliveryMinutes } = route.params;
-  const { clearCart } = useCart();
+  const { order, paymentMethod, deliveryMinutes, restaurantId } = route.params;
+  const { clearCart, clearRestaurant } = useCart();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -64,7 +65,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
 
   const handleInitiatePayment = async () => {
     if (!phone || phone.length < 9) {
-      Alert.alert('Numéro invalide', 'Veuillez entrer un numéro de téléphone valide');
+      showAlert('Numéro invalide', 'Veuillez entrer un numéro de téléphone valide');
       return;
     }
 
@@ -80,7 +81,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
       setPaymentStatus(result.payment.status);
     } catch (error) {
       const message = error.response?.data?.message || 'Erreur lors de l\'initialisation du paiement';
-      Alert.alert('Erreur', message);
+      showAlert('Erreur', message);
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
 
       if (result.payment.status === 'completed') {
         clearInterval(checkInterval.current);
-        clearCart(); // Vider le panier dès la confirmation du paiement
+        restaurantId ? clearRestaurant(restaurantId) : clearCart(); // Vider le panier dès la confirmation du paiement
         setPayment((p) => ({ ...p, ...result.payment }));
       } else if (result.payment.status === 'failed' || result.payment.status === 'cancelled') {
         clearInterval(checkInterval.current);

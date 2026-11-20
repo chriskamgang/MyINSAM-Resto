@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableOpacity, ActivityIndicator,
@@ -33,9 +34,9 @@ export default function EditProfileScreen({ navigation }) {
       const result = await profileService.updateProfile({ name: name.trim(), phone: phone.trim() });
       // On fusionne : si l'API ne renvoie qu'une partie du profil, on ne perd pas le reste (rôle, email…)
       updateUser({ ...user, ...(result?.user || result || {}) });
-      Alert.alert('Succès', 'Profil mis à jour !', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      showAlert('Succès', 'Profil mis à jour !', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
-      Alert.alert('Erreur', e.response?.data?.message || 'Impossible de mettre à jour le profil.');
+      showAlert('Erreur', e.response?.data?.message || 'Impossible de mettre à jour le profil.');
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,4 @@
+import { showAlert } from '../utils/showAlert';
 // Choix (galerie ou appareil photo) puis envoi de la photo de profil.
 import { useState } from 'react';
 import { Alert } from 'react-native';
@@ -21,7 +22,7 @@ export function useAvatarUpload() {
       const msg = error.response?.status === 422
         ? 'Image refusée : choisissez une photo de moins de 3 Mo.'
         : "La photo n'a pas pu être envoyée. Vérifiez votre connexion et réessayez.";
-      Alert.alert('Photo de profil', msg);
+      showAlert('Photo de profil', msg);
     } finally {
       setUploading(false);
     }
@@ -32,7 +33,7 @@ export function useAvatarUpload() {
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Autorisation requise', source === 'camera'
+      showAlert('Autorisation requise', source === 'camera'
         ? "Autorisez l'accès à l'appareil photo dans les réglages du téléphone."
         : "Autorisez l'accès à vos photos dans les réglages du téléphone.");
       return;
@@ -46,7 +47,7 @@ export function useAvatarUpload() {
 
   // Propose galerie ou appareil photo
   const chooseAvatar = () => {
-    Alert.alert('Photo de profil', 'Choisissez une source', [
+    showAlert('Photo de profil', 'Choisissez une source', [
       { text: 'Galerie', onPress: () => pick('library') },
       { text: 'Appareil photo', onPress: () => pick('camera') },
       { text: 'Annuler', style: 'cancel' },

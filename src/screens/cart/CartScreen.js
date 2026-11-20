@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { showAlert } from '../../utils/showAlert';
+import React, { useState, useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image, StatusBar, Dimensions,
 } from 'react-native';
@@ -11,6 +13,8 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IMAGES } from '../../theme/images';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
+import useMenuDay, { isDishOrderableToday, getDishUnavailableLabel } from '../../hooks/useMenuDay';
+import { restaurantService } from '../../services/restaurantService';
 import { Button, Card, SmartImage, EmptyState, Divider, IconButton } from '../../components/ui';
 
 const lineKey = (item) => item.cart_key || item.id;
@@ -137,14 +141,31 @@ export default function CartScreen({ navigation }) {
   const tabSpace = useTabBarSpace();
   const insets = useSafeAreaInsets();
   const {
-    items, subtotal, deliveryFee, discount, total, totalItems,
+    items, groups, subtotal, deliveryFee, discount, total, totalItems, couponRestaurantId,
     addItem, removeItem, deleteItem, clearCart, applyCoupon, removeCoupon, coupon,
     restaurant: cartRestaurant,
   } = useCart();
   const { user } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
   const isGuest = !user;
+  const today = useMenuDay();
+  const isFocused = useIsFocused();
+  const [freshMenus, setFreshMenus] = useState({});
+  const groupIds = groups.map((group) => group.restaurant?.id).filter(Boolean).join(',');
+  useEffect(() => {
+    if (!isFocused || !groupIds) return undefined;
+    let active = true;
+    setFreshMenus({});
+    Promise.all(groupIds.split(',').map(async (id) => {
+      try {
+        const data = await restaurantService.getMenu(id);
+        return [id, (data?.menu || []).flatMap((category) => category.items || [])];
+      } catch { return [id, null]; }
+    })).then((entries) => { if (active) setFreshMenus(Object.fromEntries(entries)); });
+    return () => { active = false; };
+  }, [isFocused, groupIds, today.key]);
   const [couponInput, setCouponInput] = useState('');
+  const [promoRestaurantId, setPromoRestaurantId] = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
   const goToLogin = () => navigation.navigate('Auth', { screen: 'Login' });
@@ -155,17 +176,17 @@ export default function CartScreen({ navigation }) {
     if (!couponInput.trim()) return;
     setCouponLoading(true);
     try {
-      await applyCoupon(couponInput.trim());
+      await applyCoupon(couponInput.trim(), promoRestaurantId || groups[0]?.restaurant?.id);
       setCouponInput('');
     } catch (e) {
-      Alert.alert('Coupon invalide', e.message || 'Ce code promo n\'est pas valide.');
+      showAlert('Coupon invalide', e.message || 'Ce code promo n\'est pas valide.');
     } finally {
       setCouponLoading(false);
     }
   };
 
   const handleClearCart = () => {
-    Alert.alert(
+    showAlert(
       'Vider le panier',
       'Supprimer tous les articles du panier ?',
       [
@@ -176,7 +197,7 @@ export default function CartScreen({ navigation }) {
   };
 
   const handleDelete = (item) => {
-    Alert.alert(
+    showAlert(
       'Retirer l\'article',
       `Retirer « ${item.name} » du panier ?`,
       [
@@ -210,12 +231,24 @@ export default function CartScreen({ navigation }) {
   }
 
   const barBottom = tabSpace + 6; // espace visuel au-dessus de la barre d'onglets
-  const hasOpenStatus = cartRestaurant?.is_open != null;
-  const isOpen = !!cartRestaurant?.is_open;
-  const missingMinimum = Math.max(0, (Number(cartRestaurant?.minimum_order) || 0) - subtotal);
-  const orderBlockedReason = hasOpenStatus && !isOpen
-    ? 'Ce restaurant est actuellement fermé.'
-    : missingMinimum > 0 ? `Ajoutez encore ${formatPrice(missingMinimum)} pour commander.` : null;
+  const groupReason = (group) => {
+    const restaurant = group.restaurant;
+    if (restaurant?.is_open === false) return 'Ce restaurant est actuellement fermé.';
+    const fresh = freshMenus[String(restaurant?.id)];
+    if (fresh === undefined) return 'Vérification du menu en cours…';
+    if (fresh === null) return 'Impossible de vérifier le menu. Revenez sur cette page pour réessayer.';
+    const unavailable = group.items.find((item) => {
+      const current = fresh.find((dish) => String(dish.id) === String(item.id));
+      return !current || !isDishOrderableToday(current, today);
+    });
+    if (unavailable) {
+      const current = fresh.find((dish) => String(dish.id) === String(unavailable.id));
+      return `${unavailable.name} : ${current ? getDishUnavailableLabel(current, today).toLowerCase() : 'indisponible'}.`;
+    }
+    const missing = Math.max(0, (Number(restaurant?.minimum_order) || 0) - group.subtotal);
+    return missing > 0 ? `Ajoutez encore ${formatPrice(missing)} pour commander.` : null;
+  };
+  const promoGroup = groups.find((group) => String(group.restaurant?.id) === String(promoRestaurantId)) || groups[0];
 
   return (
     <View style={styles.root}>
@@ -229,51 +262,46 @@ export default function CartScreen({ navigation }) {
         <CartHeader topInset={insets.top} onBack={goBack} onClear={handleClearCart} />
 
         <View style={styles.body}>
-          {/* Restaurant + plats */}
-          <Card style={styles.group}>
-            {cartRestaurant ? (
-              <>
-                <View style={styles.resto}>
-                  <SmartImage
-                    uri={cartRestaurant.logo || cartRestaurant.cover_image}
-                    style={styles.restoLogo}
-                    fallbackIcon="storefront-outline"
-                    iconSize={20}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.restoNameRow}>
-                      <Text style={styles.restoName} numberOfLines={1}>{cartRestaurant.name}</Text>
-                      {cartRestaurant.is_verified === true && <Ionicons name="checkmark-circle" size={15} color={COLORS.info} />}
-                    </View>
-                    <View style={styles.restoMeta}>
-                      <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
-                      <Text style={TYPE.caption}>Livraison : {deliveryTime(cartRestaurant)}</Text>
-                    </View>
+          {groups.length > 1 && <Text style={styles.groupHint}>Chaque restaurant se commande et se règle séparément.</Text>}
+          {groups.map((group) => {
+            const r = group.restaurant;
+            const hasOpenStatus = r?.is_open != null;
+            const isOpen = !!r?.is_open;
+            const reason = groupReason(group);
+            return <Card key={String(r?.id)} style={styles.group}>
+              <View style={styles.resto}>
+                <SmartImage uri={r?.logo || r?.cover_image} style={styles.restoLogo} fallbackIcon="storefront-outline" iconSize={20} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.restoNameRow}>
+                    <Text style={styles.restoName} numberOfLines={1}>{r?.name || 'Restaurant'}</Text>
+                    {r?.is_verified === true && <Ionicons name="checkmark-circle" size={15} color={COLORS.info} />}
                   </View>
-                  <View style={[styles.openPill, !hasOpenStatus && { backgroundColor: COLORS.surfaceAlt }, hasOpenStatus && !isOpen && { backgroundColor: COLORS.dangerSoft }]}>
-                    <View style={[styles.openDot, !hasOpenStatus && { backgroundColor: COLORS.textMuted }, hasOpenStatus && !isOpen && { backgroundColor: COLORS.danger }]} />
-                    <Text style={[styles.openText, !hasOpenStatus && { color: COLORS.textMuted }, hasOpenStatus && !isOpen && { color: COLORS.danger }]}>{!hasOpenStatus ? 'Horaires' : isOpen ? 'Ouvert' : 'Fermé'}</Text>
-                  </View>
+                  <View style={styles.restoMeta}><Ionicons name="time-outline" size={13} color={COLORS.textMuted} /><Text style={TYPE.caption}>Livraison : {deliveryTime(r)}</Text></View>
                 </View>
-                <Divider style={{ marginVertical: 12 }} />
-              </>
-            ) : null}
-
-            {items.map((item, i) => (
-              <View key={String(lineKey(item))}>
-                {i > 0 ? <Divider style={{ marginVertical: 12 }} /> : null}
-                <CartLine
-                  item={item}
-                  favorite={!!isFavorite?.('item', item.id)}
-                  onToggleFavorite={() => handleFavorite(item)}
-                  onIncrease={() => addItem(item, 1)}
-                  onDecrease={() => removeItem(lineKey(item))}
-                  onDelete={() => handleDelete(item)}
-                />
+                <View style={[styles.openPill, !hasOpenStatus && { backgroundColor: COLORS.surfaceAlt }, hasOpenStatus && !isOpen && { backgroundColor: COLORS.dangerSoft }]}>
+                  <View style={[styles.openDot, !hasOpenStatus && { backgroundColor: COLORS.textMuted }, hasOpenStatus && !isOpen && { backgroundColor: COLORS.danger }]} />
+                  <Text style={[styles.openText, !hasOpenStatus && { color: COLORS.textMuted }, hasOpenStatus && !isOpen && { color: COLORS.danger }]}>{!hasOpenStatus ? 'Horaires' : isOpen ? 'Ouvert' : 'Fermé'}</Text>
+                </View>
               </View>
-            ))}
-          </Card>
-
+              <Divider style={{ marginVertical: 12 }} />
+              {group.items.map((item, i) => <View key={String(lineKey(item))}>
+                {i > 0 && <Divider style={{ marginVertical: 12 }} />}
+                <CartLine item={item} favorite={!!isFavorite?.('item', item.id)} onToggleFavorite={() => handleFavorite(item)}
+                  onIncrease={() => addItem(item, 1)} onDecrease={() => removeItem(lineKey(item))} onDelete={() => handleDelete(item)} />
+              </View>)}
+              {reason && <Text style={styles.groupHint}>{reason}</Text>}
+              {groups.length > 1 && <TouchableOpacity style={[styles.groupCheckout, !!reason && { opacity: 0.45 }]} disabled={!!reason}
+                onPress={() => isGuest ? goToLogin() : navigation.navigate('Checkout', { restaurantId: r?.id })}>
+                <Text style={styles.groupCheckoutText}>Commander chez {r?.name} · {formatPrice(Math.max(0, group.subtotal + (coupon?.type === 'free_delivery' && String(couponRestaurantId) === String(r?.id) ? 0 : group.deliveryFee) - (String(couponRestaurantId) === String(r?.id) ? discount : 0)))}</Text>
+                <Ionicons name="arrow-forward" size={17} color={COLORS.white} />
+              </TouchableOpacity>}
+            </Card>;
+          })}
+          {groups.length > 1 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            {groups.map((group) => <TouchableOpacity key={String(group.restaurant?.id)} onPress={() => { removeCoupon(); setPromoRestaurantId(group.restaurant?.id); }} style={[styles.promoChoice, String(promoGroup?.restaurant?.id) === String(group.restaurant?.id) && styles.promoChoiceActive]}>
+              <Text style={{ color: String(promoGroup?.restaurant?.id) === String(group.restaurant?.id) ? COLORS.white : COLORS.text }}>Promo · {group.restaurant?.name}</Text>
+            </TouchableOpacity>)}
+          </View>}
           {/* Code promo */}
           {coupon ? (
             <View style={styles.couponApplied}>
@@ -338,7 +366,7 @@ export default function CartScreen({ navigation }) {
             />
             <SummaryRow
               icon="bicycle-outline"
-              label="Frais de livraison"
+              label={groups.length > 1 ? "Livraisons séparées" : "Frais de livraison"}
               value={deliveryFee === 0 ? 'Gratuite' : formatPrice(deliveryFee)}
               color={deliveryFee === 0 ? COLORS.success : null}
             />
@@ -347,30 +375,22 @@ export default function CartScreen({ navigation }) {
             ) : null}
             <Divider style={{ marginVertical: 12 }} />
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total à payer</Text>
+              <Text style={styles.totalLabel}>{groups.length > 1 ? 'Total estimé' : 'Total à payer'}</Text>
               <Text style={styles.totalValue}>{formatPrice(total)}</Text>
             </View>
           </Card>
         </View>
       </ScrollView>
 
-      {/* Bouton principal, au-dessus de la barre d'onglets */}
-      <View style={[styles.bar, { bottom: barBottom }]} pointerEvents="box-none">
-        {orderBlockedReason || isGuest ? (
-          <View style={styles.guestNote}>
-            <Ionicons name={orderBlockedReason ? 'information-circle-outline' : 'person-circle-outline'} size={16} color={COLORS.primary} />
-            <Text style={styles.guestNoteText}>{orderBlockedReason || 'Connectez-vous pour finaliser votre commande'}</Text>
-          </View>
-        ) : null}
-        <Button
-          title="Passer la commande"
-          icon="card-outline"
-          iconRight="arrow-forward"
-          onPress={() => (isGuest ? goToLogin() : navigation.navigate('Checkout'))}
-          disabled={!!orderBlockedReason}
-          style={{ borderRadius: RADIUS.pill }}
-        />
-      </View>
+      {groups.length === 1 && <View style={[styles.bar, { bottom: barBottom }]} pointerEvents="box-none">
+        {(groupReason(groups[0]) || isGuest) && <View style={styles.guestNote}>
+          <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
+          <Text style={styles.guestNoteText}>{groupReason(groups[0]) || 'Connectez-vous pour finaliser votre commande'}</Text>
+        </View>}
+        <Button title="Passer la commande" icon="card-outline" iconRight="arrow-forward"
+          onPress={() => isGuest ? goToLogin() : navigation.navigate('Checkout', { restaurantId: groups[0].restaurant?.id })}
+          disabled={!!groupReason(groups[0])} style={{ borderRadius: RADIUS.pill }} />
+      </View>}
     </View>
   );
 }
@@ -404,6 +424,11 @@ const styles = StyleSheet.create({
   },
 
   body: { paddingHorizontal: 14, paddingTop: 1 },
+  groupHint: { ...TYPE.caption, color: COLORS.primary, marginVertical: 8 },
+  groupCheckout: { backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, padding: 13, marginTop: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  groupCheckoutText: { color: COLORS.white, fontFamily: FONTS.semibold, fontSize: 13, flexShrink: 1 },
+  promoChoice: { borderRadius: RADIUS.pill, borderWidth: 1, borderColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8 },
+  promoChoiceActive: { backgroundColor: COLORS.primary },
   emptyWrap: { flex: 1, justifyContent: 'center' },
 
   // Carte restaurant

@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +7,8 @@ import { useCart } from '../../context/CartContext';
 import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import { useAuth } from '../../context/AuthContext';
 import { orderService } from '../../services/orderService';
+import { restaurantService } from '../../services/restaurantService';
+import { getMenuDay, isDishOrderableToday } from '../../hooks/useMenuDay';
 import { profileService } from '../../services/profileService';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { Screen, ScreenHeader, Button, Input, Card, Badge, Divider, MetaItem } from '../../components/ui';
@@ -84,8 +87,16 @@ function AddressOption({ title, address, phone, isDefault, selected, onPress, on
   );
 }
 
-export default function CheckoutScreen({ navigation }) {
-  const { items, subtotal, deliveryFee: cartDeliveryFee, discount, coupon, clearCart, restaurant: cartRestaurant } = useCart();
+export default function CheckoutScreen({ navigation, route }) {
+  const { groups, discount: cartDiscount, coupon: cartCoupon, couponRestaurantId, clearRestaurant } = useCart();
+  const restaurantId = route?.params?.restaurantId;
+  const group = groups.find((entry) => String(entry.restaurant?.id) === String(restaurantId));
+  const items = group?.items || [];
+  const subtotal = group?.subtotal || 0;
+  const cartRestaurant = group?.restaurant;
+  const cartDeliveryFee = cartCoupon?.type === 'free_delivery' && String(couponRestaurantId) === String(restaurantId) ? 0 : (group?.deliveryFee || 0);
+  const coupon = String(couponRestaurantId) === String(restaurantId) ? cartCoupon : null;
+  const discount = coupon ? cartDiscount : 0;
   const { location, setLocation, selectSavedAddress } = useDeliveryLocation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -259,13 +270,30 @@ export default function CheckoutScreen({ navigation }) {
   };
 
   const handleOrder = async () => {
+    if (!cartRestaurant || items.length === 0) {
+      showAlert('Panier vide', 'Ce restaurant ne contient plus de plats dans votre panier.');
+      navigation.goBack();
+      return;
+    }
     if (!selectedAddress) {
-      Alert.alert('Adresse manquante', 'Veuillez sélectionner une adresse de livraison.');
+      showAlert('Adresse manquante', 'Veuillez sélectionner une adresse de livraison.');
       return;
     }
 
     setLoading(true);
     try {
+      // Le panier peut rester ouvert pendant un changement de jour ou de disponibilité.
+      const fresh = await restaurantService.getMenu(cartRestaurant.id);
+      const menuItems = (fresh?.menu || []).flatMap((category) => category.items || []);
+      const day = getMenuDay();
+      const unavailable = items.find((entry) => {
+        const current = menuItems.find((dish) => String(dish.id) === String(entry.id));
+        return !current || !isDishOrderableToday(current, day);
+      });
+      if (unavailable) throw new Error(`« ${unavailable.name} » n'est plus disponible ce ${day.label}. Actualisez votre panier.`);
+      if (fresh?.restaurant?.is_open === false) throw new Error('Ce restaurant est actuellement fermé.');
+      const minimum = Number(fresh?.restaurant?.minimum_order ?? cartRestaurant.minimum_order) || 0;
+      if (subtotal < minimum) throw new Error(`Le minimum de commande est de ${formatPrice(minimum)}.`);
       // Adresse temporaire : on la crée d'abord
       let addressId = selectedAddress.id;
       if (selectedAddress.id === 'temp') {
@@ -283,7 +311,7 @@ export default function CheckoutScreen({ navigation }) {
       }
 
       const orderData = {
-        restaurant_id: cartRestaurant?.id || 1,
+        restaurant_id: cartRestaurant.id,
         address_id: addressId,
         payment_method: paymentMethod,
         special_instructions: note.trim() || null,
@@ -312,24 +340,24 @@ export default function CheckoutScreen({ navigation }) {
       // Paiement mobile money → écran de paiement
       // NE PAS vider le panier ici, on le videra après confirmation du paiement
       if (paymentMethod === 'mtn_momo' || paymentMethod === 'orange_money') {
-        navigation.replace('MobilePayment', { order, paymentMethod, deliveryMinutes });
+        navigation.replace('MobilePayment', { order, paymentMethod, deliveryMinutes, restaurantId });
         return;
       }
 
       // Compte GFS → page de paiement GFS (panier vidé après confirmation)
       if (paymentMethod === 'gfs') {
-        navigation.replace('GfsPayment', { order, deliveryMinutes });
+        navigation.replace('GfsPayment', { order, deliveryMinutes, restaurantId });
         return;
       }
 
       // Sinon (espèces) → confirmation directe et panier vidé
-      clearCart();
+      clearRestaurant(restaurantId);
       navigation.replace('OrderConfirmation', { order, deliveryMinutes });
     } catch (e) {
       const msg = e.response?.data?.message
         || (!e.isAxiosError && e.message)
         || 'Une erreur est survenue lors de la commande.';
-      Alert.alert('Erreur', msg);
+      showAlert('Erreur', msg);
     } finally {
       setLoading(false);
     }
@@ -531,7 +559,7 @@ export default function CheckoutScreen({ navigation }) {
         <Card style={styles.section}>
           <StepTitle index={4} title="Récapitulatif" icon="receipt-outline" />
           {items.map((item) => (
-            <View key={item.id} style={styles.sumItem}>
+            <View key={item.cart_key || item.id} style={styles.sumItem}>
               <View style={styles.qtyPill}><Text style={styles.qtyPillText}>{item.quantity}×</Text></View>
               <Text style={styles.sumName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.sumValue}>
