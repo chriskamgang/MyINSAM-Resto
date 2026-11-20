@@ -42,6 +42,21 @@ export function isDishOrderableToday(item, day = getMenuDay()) {
   return item.is_available !== false && item.is_available !== 0 && isDishServedToday(item, day);
 }
 
+export function getDishUnavailableLabel(item, day = getMenuDay()) {
+  if (isDishOrderableToday(item, day)) return null;
+  const schedule = scheduleDays(item.available_days);
+  if (schedule?.length && !isDishServedToday(item, day)) {
+    const scheduledKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+      .filter((key) => schedule.some((value) => ALIASES[key].includes(String(value).toLowerCase())));
+    const days = scheduledKeys.map((key) => LABELS[KEYS.indexOf(key)]);
+    if (days.length === 1) return `Disponible ${days[0]}`;
+    if (days.length > 1) return `Disponible ${days.slice(0, -1).join(', ')} et ${days[days.length - 1]}`;
+    const backendLabel = String(item.available_days_label || '').trim();
+    if (backendLabel) return `Disponible ${backendLabel}`;
+  }
+  return 'Indisponible';
+}
+
 export default function useMenuDay() {
   const [day, setDay] = useState(getMenuDay);
   useEffect(() => {

@@ -13,7 +13,7 @@ import { restaurantService } from '../../services/restaurantService';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, Badge, SmartImage, QuantityStepper } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
-import useMenuDay, { isDishOrderableToday, isDishServedToday } from '../../hooks/useMenuDay';
+import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
 
 const { width, height } = Dimensions.get('window');
 const HEADER_H = Math.max(420, Math.min(Math.round(height * 0.68), 680));
@@ -273,11 +273,11 @@ export default function ItemDetailScreen({ route, navigation }) {
       .then(data => {
         if (!alive) return;
         const all = (data?.menu || []).flatMap(c => (Array.isArray(c.items) ? c.items : []));
-        setSuggestions(all.filter(d => d.id !== item.id && d.is_available !== false).slice(0, 8));
+        setSuggestions(all.filter(d => d.id !== item.id && isDishOrderableToday(d, menuDay)).slice(0, 8));
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, [restaurant?.id, item.id]);
+  }, [restaurant?.id, item.id, menuDay]);
 
   // Les prix peuvent arriver en chaîne depuis l'API : toujours comparer en nombres
   const basePrice = Number(item.price) || 0;
@@ -301,7 +301,8 @@ export default function ItemDetailScreen({ route, navigation }) {
   const description = clean(item.description);
   const isAvailable = isDishOrderableToday(item, menuDay);
   const hint = availabilityHint(description);
-  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : isDishServedToday(item, menuDay) ? 'Indisponible' : `Pas au menu ce ${menuDay.label}`;
+  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : getDishUnavailableLabel(item, menuDay);
+  const scheduledLater = !isAvailable && availabilityLabel !== 'Indisponible';
 
   // Restaurant
   const restoRating = Number(restaurant?.rating) || 0;
@@ -324,7 +325,9 @@ export default function ItemDetailScreen({ route, navigation }) {
   if (tiles.length < 4) {
     tiles.push(isAvailable
       ? { icon: 'checkmark-circle-outline', title: 'Disponible', sub: 'Statut', color: COLORS.success }
-      : { icon: 'close-circle-outline', title: 'Indisponible', sub: 'Statut', color: COLORS.danger });
+      : scheduledLater
+        ? { icon: 'calendar-outline', title: 'Autre jour', sub: 'Disponibilité', color: COLORS.primary }
+        : { icon: 'close-circle-outline', title: 'Indisponible', sub: 'Statut', color: COLORS.danger });
   }
 
   const showToast = (msg) => {
@@ -392,6 +395,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   // Ajout rapide depuis « Vous aimerez aussi »
   const openDish = (dish) => navigation.push('ItemDetail', { item: dish, restaurant });
   const quickAdd = async (dish) => {
+    if (!isDishOrderableToday(dish, menuDay)) { showToast(getDishUnavailableLabel(dish, menuDay)); return; }
     if ((dish.option_groups || []).some(g => g.is_required)) { openDish(dish); return; }
     const added = await addItem({ ...dish, effective_price: pricing(dish).effective }, 1, restaurant);
     if (added !== false) showToast(`${clean(dish.name)} ajouté au panier`);
@@ -472,9 +476,9 @@ export default function ItemDetailScreen({ route, navigation }) {
           <View style={styles.availabilityRow}>
             <Badge
               label={availabilityLabel}
-              icon={isAvailable ? 'checkmark-circle' : 'close-circle'}
-              color={isAvailable ? COLORS.success : COLORS.danger}
-              bg={isAvailable ? COLORS.successSoft : COLORS.dangerSoft}
+              icon={isAvailable ? 'checkmark-circle' : scheduledLater ? 'calendar-outline' : 'close-circle'}
+              color={isAvailable ? COLORS.success : scheduledLater ? COLORS.primaryDark : COLORS.danger}
+              bg={isAvailable ? COLORS.successSoft : scheduledLater ? COLORS.primarySoft : COLORS.dangerSoft}
             />
             {inCartQty > 0 ? (
               <Badge label={`Déjà ${inCartQty} au panier`} icon="cart" color={COLORS.primary} bg={COLORS.primarySoft} />
@@ -552,7 +556,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                 <Ionicons name={isAvailable ? 'cart-outline' : 'close-circle-outline'} size={26} color={COLORS.white} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.addMainTitle} numberOfLines={1}>
-                    {!isAvailable ? 'Indisponible' : adding === 'cart' ? 'Ajout…' : 'Ajouter au panier'}
+                    {!isAvailable ? availabilityLabel : adding === 'cart' ? 'Ajout…' : 'Ajouter au panier'}
                   </Text>
                   <Text style={styles.addMainSub} numberOfLines={1}>{formatPrice(totalPrice)}</Text>
                 </View>

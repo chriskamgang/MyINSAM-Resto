@@ -12,7 +12,7 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
-import useMenuDay, { isDishOrderableToday, isDishServedToday } from '../../hooks/useMenuDay';
+import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = 205;
@@ -222,7 +222,7 @@ function DishCard({ item, liked, onLike, onPress, onAdd, day }) {
     <TouchableOpacity style={styles.dishCard} onPress={() => onPress(item)} activeOpacity={0.9}>
       <SmartImage uri={item.image} fallbackSource={dishFallbackImage(item)} style={styles.dishImage} iconSize={30}>
         {unavailable ? (
-          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText}>{isDishServedToday(item, day) ? 'Indisponible' : `Pas ce ${day.label}`}</Text></View>
+          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText} numberOfLines={2}>{getDishUnavailableLabel(item, day)}</Text></View>
         ) : null}
         {hasPromo ? (
           <View style={[styles.dishTag, { backgroundColor: COLORS.success }]}>
@@ -364,7 +364,7 @@ export default function RestaurantScreen({ route, navigation }) {
 
   // Ajout rapide : pas de connexion exigée (panier invité, connexion demandée au paiement)
   const handleAdd = async (item) => {
-    if (!isDishOrderableToday(item, menuDay)) { toast.show(`Ce plat n’est pas au menu ce ${menuDay.label}`); return false; }
+    if (!isDishOrderableToday(item, menuDay)) { toast.show(getDishUnavailableLabel(item, menuDay)); return false; }
     // Un plat avec options obligatoires doit passer par la fiche pour les choisir
     const needsChoice = (item.option_groups || []).some(g => g.is_required);
     if (needsChoice) { openItem(item); return false; }
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,20,31,0.45)',
     alignItems: 'center', justifyContent: 'center',
   },
-  dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white },
+  dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 16, color: COLORS.white, textAlign: 'center', marginHorizontal: 10 },
   dishBody: { padding: 8, paddingTop: 6, flex: 1 },
   dishName: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 14, color: COLORS.text },
   dishDesc: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 11, color: COLORS.textMuted, marginTop: 2 },

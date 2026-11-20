@@ -15,7 +15,7 @@ import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
-import useMenuDay, { isDishOrderableToday } from '../../hooks/useMenuDay';
+import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
 import { categoryImage, categoryIcon, dishFallbackImage } from '../../theme/images';
 import {
   Screen, SearchBar, SectionHeader, SmartImage, Rating, MetaItem, EmptyState, LoadingView, IconButton,
@@ -93,7 +93,7 @@ function DishRow({ item, onPress, onAdd, day }) {
       <View style={{ flex: 1 }}>
         <Text style={TYPE.title} numberOfLines={1}>{item.name}</Text>
         <Text style={TYPE.caption} numberOfLines={1}>{item._restaurant?.name}</Text>
-        {!orderable && <Text style={styles.notToday}>Pas au menu ce {day.label}</Text>}
+        {!orderable && <Text style={styles.notToday} numberOfLines={2}>{getDishUnavailableLabel(item, day)}</Text>}
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
           <Text style={TYPE.price}>{formatPrice(hasPromo ? item.discount_price : item.price)}</Text>
           {hasPromo && <Text style={styles.oldPrice}>{formatPrice(item.price)}</Text>}
@@ -256,7 +256,7 @@ export default function HomeScreen({ navigation }) {
     if (remoteRestaurants.length > 0) loadDishes(remoteRestaurants, false);
   }, [remoteRestaurants, loadDishes]);
   const searchDishes = useMemo(() => (q
-    ? dishes.filter((d) => d.is_available !== false && d.is_available !== 0 && dishCategoryText(d).toLowerCase().includes(q) && (!categoryMatcher || categoryMatcher.test(dishTypeText(d))))
+    ? dishes.filter((d) => dishCategoryText(d).toLowerCase().includes(q) && (!categoryMatcher || categoryMatcher.test(dishTypeText(d))))
     : []), [q, dishes, categoryMatcher]);
   // Restaurants dont le nom correspond, puis ceux qui proposent un plat correspondant
   const searchRestaurants = useMemo(() => {
