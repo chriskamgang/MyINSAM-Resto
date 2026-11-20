@@ -4,6 +4,7 @@ import {
   RefreshControl, Dimensions, Modal, StatusBar, FlatList, Linking, Share, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { restaurantService } from '../../services/restaurantService';
@@ -12,7 +13,9 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
-import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
+import { getDishUnavailableLabel, isDishFeaturedForDay, isDishOrderableToday, isDishScheduledForDay } from '../../hooks/useMenuDay';
+import { useMenuDaySelection } from '../../context/MenuDayContext';
+import MenuDaySelector from '../../components/MenuDaySelector';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = 205;
@@ -213,16 +216,19 @@ function CategoryTile({ label, icon, active, onPress }) {
 }
 
 // ── Carte de plat (grille 2 colonnes) ──
-function DishCard({ item, liked, onLike, onPress, onAdd, day }) {
+function DishCard({ item, liked, onLike, onPress, onAdd, day, today }) {
   const { price, effective, hasPromo, percent } = pricing(item);
   const desc = clean(item.description);
-  const unavailable = !isDishOrderableToday(item, day);
+  const unavailable = !isDishOrderableToday(item, today);
+  const futureMenu = day.key !== today.key && isDishFeaturedForDay(item, day, today);
 
   return (
     <TouchableOpacity style={styles.dishCard} onPress={() => onPress(item)} activeOpacity={0.9}>
       <SmartImage uri={item.image} fallbackSource={dishFallbackImage(item)} style={styles.dishImage} iconSize={30}>
-        {unavailable ? (
-          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText} numberOfLines={2}>{getDishUnavailableLabel(item, day)}</Text></View>
+        {unavailable ? futureMenu ? (
+          <View style={styles.dishSchedulePill}><Ionicons name="calendar-outline" size={11} color={COLORS.primaryDark} /><Text style={styles.dishScheduleText}>Disponible {day.label}</Text></View>
+        ) : (
+          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText} numberOfLines={2}>{getDishUnavailableLabel(item, today)}</Text></View>
         ) : null}
         {hasPromo ? (
           <View style={[styles.dishTag, { backgroundColor: COLORS.success }]}>
@@ -255,7 +261,8 @@ function DishCard({ item, liked, onLike, onPress, onAdd, day }) {
 }
 
 export default function RestaurantScreen({ route, navigation }) {
-  const menuDay = useMenuDay();
+  const { today, selectedDay: menuDay } = useMenuDaySelection();
+  const isFocused = useIsFocused();
   const { restaurant: routeRestaurant } = route.params;
   const { addItem, totalItems, subtotal } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -311,7 +318,12 @@ export default function RestaurantScreen({ route, navigation }) {
     }
   }, [routeRestaurant.id]);
 
-  useEffect(() => { loadMenu(); }, [loadMenu, menuDay.key]);
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    loadMenu();
+    const timer = setInterval(loadMenu, 60000);
+    return () => clearInterval(timer);
+  }, [isFocused, loadMenu, today.key]);
   const onRefresh = () => { setRefreshing(true); loadMenu(); };
 
   // Les catégories sans plat ne sont jamais affichées
@@ -320,9 +332,10 @@ export default function RestaurantScreen({ route, navigation }) {
     [categories]
   );
   const allItems = useMemo(() => visibleCategories.flatMap(c => c.items), [visibleCategories]);
-  const todayItems = useMemo(() => allItems.filter((item) => isDishOrderableToday(item, menuDay)), [allItems, menuDay]);
-  const heroDish = todayItems.find((item) => item.is_featured && item.image) || todayItems.find((item) => item.image);
-  const promoItems = useMemo(() => todayItems.filter(i => pricing(i).hasPromo), [todayItems]);
+  const selectedItems = useMemo(() => allItems.filter((item) => isDishScheduledForDay(item, menuDay)), [allItems, menuDay]);
+  const featuredItems = useMemo(() => selectedItems.filter((item) => isDishFeaturedForDay(item, menuDay, today)), [selectedItems, menuDay, today]);
+  const heroDish = featuredItems.find((item) => item.is_featured && item.image) || featuredItems.find((item) => item.image);
+  const promoItems = useMemo(() => featuredItems.filter(i => pricing(i).hasPromo), [featuredItems]);
   const maxPercent = promoItems.reduce((m, i) => Math.max(m, pricing(i).percent), 0);
 
   // Filtre courant (retombe sur « Tous » si la catégorie n'existe plus)
@@ -330,28 +343,27 @@ export default function RestaurantScreen({ route, navigation }) {
   const activeFilter = filter === 'promos' ? (promoItems.length ? 'promos' : 'all') : (currentCategory ? filter : 'all');
 
   const popularSorted = useMemo(
-    () => [...todayItems].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)),
-    [todayItems]
+    () => [...selectedItems].sort((a, b) => Number(isDishFeaturedForDay(b, menuDay, today)) - Number(isDishFeaturedForDay(a, menuDay, today)) || Number(!!b.is_featured) - Number(!!a.is_featured)),
+    [selectedItems, menuDay, today]
   );
-  const allSorted = useMemo(() => [...popularSorted, ...allItems.filter((item) => !isDishOrderableToday(item, menuDay))], [popularSorted, allItems, menuDay]);
   const query = clean(search).toLocaleLowerCase('fr');
   let gridItems; let sectionTitle;
   if (activeFilter === 'promos') { gridItems = promoItems; sectionTitle = 'Promotions'; }
   else if (activeFilter === 'all') {
-    gridItems = query || showAll ? allSorted : popularSorted.slice(0, POPULAR_LIMIT);
-    sectionTitle = query || showAll ? 'Tous les plats' : `À découvrir ce ${menuDay.label}`;
-  } else { gridItems = [...currentCategory.items].sort((a, b) => Number(isDishOrderableToday(b, menuDay)) - Number(isDishOrderableToday(a, menuDay))); sectionTitle = labelize(currentCategory.name); }
+    gridItems = query || showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
+    sectionTitle = query ? `Résultats du ${menuDay.label}` : `Menu du ${menuDay.label}`;
+  } else { gridItems = currentCategory.items.filter((item) => isDishScheduledForDay(item, menuDay)); sectionTitle = labelize(currentCategory.name); }
   if (query) {
     gridItems = gridItems.filter((item) => `${item.name || ''} ${item.description || ''} ${visibleCategories.find((category) => category.id === item.menu_category_id)?.name || ''}`.toLocaleLowerCase('fr').includes(query));
-    sectionTitle = 'Résultats dans ce restaurant';
+    sectionTitle = `Résultats du ${menuDay.label}`;
   }
-  const canExpand = !query && activeFilter === 'all' && allItems.length > Math.min(POPULAR_LIMIT, popularSorted.length);
+  const canExpand = !query && activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
 
   const isOpen = !!restaurant.is_open;
   const hasOpenStatus = restaurant.is_open != null;
   const photos = Array.isArray(restaurant.photos) ? restaurant.photos : [];
   const hours = useMemo(() => parseOpeningHours(restaurant.opening_hours), [restaurant.opening_hours]);
-  const todayHours = hours.find(h => h.key === menuDay.key);
+  const todayHours = hours.find(h => h.key === today.key);
   const closeLabel = hourLabel(todayHours?.close);
   const addressLine = [clean(restaurant.address), clean(restaurant.city)].filter(Boolean).join(', ');
   const hasPracticalInfo = addressLine || restaurant.phone || hours.length > 0 || Number(restaurant.minimum_order) > 0;
@@ -364,7 +376,7 @@ export default function RestaurantScreen({ route, navigation }) {
 
   // Ajout rapide : pas de connexion exigée (panier invité, connexion demandée au paiement)
   const handleAdd = async (item) => {
-    if (!isDishOrderableToday(item, menuDay)) { toast.show(getDishUnavailableLabel(item, menuDay)); return false; }
+    if (!isDishOrderableToday(item, today)) { toast.show(getDishUnavailableLabel(item, today)); return false; }
     // Un plat avec options obligatoires doit passer par la fiche pour les choisir
     const needsChoice = (item.option_groups || []).some(g => g.is_required);
     if (needsChoice) { openItem(item); return false; }
@@ -469,17 +481,18 @@ export default function RestaurantScreen({ route, navigation }) {
               key={item.id}
               item={item}
               day={menuDay}
+              today={today}
               liked={isFavorite('item', item.id)}
               onLike={onLikeItem}
               onPress={openItem}
               onAdd={handleAdd}
             />
           ))}
-        </View> : <EmptyState icon="search-outline" title={query ? 'Aucun plat trouvé' : 'Aucun plat aujourd’hui'} message={query ? `Aucun plat ne correspond à « ${clean(search)} » dans ce restaurant.` : `Ce restaurant n’a pas de plat disponible ce ${menuDay.label}. Vous pouvez consulter son menu complet.`} actionLabel={query ? 'Effacer la recherche' : canExpand ? 'Voir le menu complet' : undefined} onAction={() => query ? setSearch('') : setShowAll(true)} />}
+        </View> : <EmptyState icon="calendar-outline" title={query ? 'Aucun plat trouvé' : `Aucun plat le ${menuDay.label}`} message={query ? `Aucun plat du ${menuDay.label} ne correspond à « ${clean(search)} ».` : `Ce restaurant n’a pas de plat prévu le ${menuDay.label}. Choisissez un autre jour.`} actionLabel={query ? 'Effacer la recherche' : undefined} onAction={() => setSearch('')} />}
 
         {canExpand && !showAll ? (
           <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAll(true)} activeOpacity={0.85}>
-            <Text style={styles.moreBtnText}>Voir les {allItems.length} plats</Text>
+            <Text style={styles.moreBtnText}>Voir les {popularSorted.length} plats du {menuDay.label}</Text>
             <Ionicons name="chevron-down" size={16} color={COLORS.primary} />
           </TouchableOpacity>
         ) : null}
@@ -583,6 +596,7 @@ export default function RestaurantScreen({ route, navigation }) {
           <View style={styles.restaurantSearchRow}>
             <SearchBar value={search} onChangeText={setSearch} placeholder={`Rechercher un plat chez ${clean(restaurant.name)}...`} style={styles.restaurantSearch} />
           </View>
+          <MenuDaySelector />
         </View>
 
         {/* ── Tuiles de catégories collantes (seulement les catégories non vides) ── */}
@@ -670,8 +684,8 @@ export default function RestaurantScreen({ route, navigation }) {
                   <View style={styles.hoursList}>
                     {hours.map(h => (
                       <View key={h.key} style={styles.hoursRow}>
-                        <Text style={[styles.hoursDay, h.key === menuDay.key && styles.hoursToday]}>{h.label}</Text>
-                        <Text style={[styles.hoursValue, h.key === menuDay.key && styles.hoursToday]}>{h.value}</Text>
+                        <Text style={[styles.hoursDay, h.key === today.key && styles.hoursToday]}>{h.label}</Text>
+                        <Text style={[styles.hoursValue, h.key === today.key && styles.hoursToday]}>{h.value}</Text>
                       </View>
                     ))}
                   </View>
@@ -928,6 +942,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 16, color: COLORS.white, textAlign: 'center', marginHorizontal: 10 },
+  dishSchedulePill: { position: 'absolute', bottom: 6, left: 6, right: 6, minHeight: 23, borderRadius: 12, paddingHorizontal: 7, backgroundColor: 'rgba(255,248,243,0.96)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  dishScheduleText: { fontFamily: FONTS.semibold, fontSize: 10, color: COLORS.primaryDark },
   dishBody: { padding: 8, paddingTop: 6, flex: 1 },
   dishName: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 14, color: COLORS.text },
   dishDesc: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 11, color: COLORS.textMuted, marginTop: 2 },

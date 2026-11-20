@@ -12,6 +12,13 @@ const ALIASES = {
   sat: ['sat', 'saturday', 'sam', 'samedi', '6'],
 };
 
+export const MENU_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+  .map((key) => ({ key, label: LABELS[KEYS.indexOf(key)] }));
+
+export function menuDayFromKey(key) {
+  return MENU_DAYS.find((day) => day.key === key) || getMenuDay();
+}
+
 export function getMenuDay(date = new Date()) {
   // Les restaurants de l'application sont au Cameroun (UTC+1).
   const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Africa/Douala' })
@@ -36,6 +43,20 @@ export function isDishServedToday(item, day = getMenuDay()) {
   if (schedule) return schedule.some((value) => ALIASES[day.key].includes(String(value).toLowerCase()));
   if (item.served_today != null) return item.served_today === true || item.served_today === 1 || item.served_today === '1';
   return true;
+}
+
+export function isDishScheduledForDay(item, day) {
+  const schedule = scheduleDays(item.available_days);
+  if (!schedule) return true;
+  return schedule.some((value) => ALIASES[day.key].includes(String(value).toLowerCase()));
+}
+
+export function isDishFeaturedForDay(item, day, today = getMenuDay()) {
+  if (!item.id || !isDishScheduledForDay(item, day)) return false;
+  if (day.key === today.key) return isDishOrderableToday(item, today);
+  const schedule = scheduleDays(item.available_days);
+  // Hors du jour courant, l'API peut mettre is_available à false pour le seul motif du planning.
+  return schedule ? true : item.is_available !== false && item.is_available !== 0;
 }
 
 export function isDishOrderableToday(item, day = getMenuDay()) {

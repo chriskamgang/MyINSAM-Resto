@@ -15,7 +15,9 @@ import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
-import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
+import { getDishUnavailableLabel, isDishFeaturedForDay, isDishOrderableToday } from '../../hooks/useMenuDay';
+import { useMenuDaySelection } from '../../context/MenuDayContext';
+import MenuDaySelector from '../../components/MenuDaySelector';
 import { categoryImage, categoryIcon, dishFallbackImage } from '../../theme/images';
 import {
   Screen, SearchBar, SectionHeader, SmartImage, Rating, MetaItem, EmptyState, LoadingView, IconButton,
@@ -106,7 +108,7 @@ function DishRow({ item, onPress, onAdd, day }) {
   );
 }
 
-function HomeDishCard({ item, liked, onLike, onPress, onAdd }) {
+function HomeDishCard({ item, liked, onLike, onPress, onAdd, previewOnly }) {
   const base = Number(item.price) || 0;
   const promo = Number(item.discount_price) || 0;
   const hasPromo = promo > 0 && promo < base;
@@ -125,7 +127,7 @@ function HomeDishCard({ item, liked, onLike, onPress, onAdd }) {
         <Text style={styles.dishDescription} numberOfLines={1}>{item.description || item._restaurant?.name || 'Plat du jour'}</Text>
         <View style={styles.dishBottom}>
           <View style={{ flex: 1 }}><Text style={styles.dishPrice} numberOfLines={1}>{formatPrice(hasPromo ? promo : base)}</Text>{hasPromo && <Text style={styles.dishOldPrice}>{formatPrice(base)}</Text>}</View>
-          <TouchableOpacity style={styles.dishAdd} onPress={onAdd} accessibilityLabel={`Ajouter ${item.name} au panier`}><Ionicons name="cart-outline" size={17} color="#fff" /></TouchableOpacity>
+          <TouchableOpacity style={styles.dishAdd} onPress={onAdd} accessibilityLabel={previewOnly ? `Voir quand ${item.name} est disponible` : `Ajouter ${item.name} au panier`}><Ionicons name={previewOnly ? 'calendar-outline' : 'cart-outline'} size={17} color="#fff" /></TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
@@ -134,7 +136,7 @@ function HomeDishCard({ item, liked, onLike, onPress, onAdd }) {
 
 export default function HomeScreen({ navigation }) {
   const isFocused = useIsFocused();
-  const menuDay = useMenuDay();
+  const { today, selectedDay: menuDay } = useMenuDaySelection();
   const tabSpace = useTabBarSpace();
   const { user } = useAuth();
   const { addItem } = useCart();
@@ -209,7 +211,12 @@ export default function HomeScreen({ navigation }) {
     }
   }, [loadDishes]);
 
-  useEffect(() => { loadData(); }, [loadData, menuDay.key]);
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    loadData();
+    const timer = setInterval(loadData, 120000);
+    return () => clearInterval(timer);
+  }, [isFocused, loadData, today.key]);
 
   // Pagination : charge la page suivante quand on arrive en bas de la liste
   const loadMore = useCallback(async () => {
@@ -274,7 +281,7 @@ export default function HomeScreen({ navigation }) {
   const openDish = (item) => navigation.navigate('ItemDetail', { item, restaurant: item._restaurant });
   const openAllRestaurants = () => navigation.navigate('RestaurantList');
   const addDish = (item) => {
-    if (!isDishOrderableToday(item, menuDay)) return openDish(item);
+    if (!isDishOrderableToday(item, today)) return openDish(item);
     if ((item.option_groups || []).some((group) => group.is_required)) return openDish(item);
     const price = Number(item.price) || 0;
     const promo = Number(item.discount_price) || 0;
@@ -282,15 +289,15 @@ export default function HomeScreen({ navigation }) {
   };
 
   const recentDishes = useMemo(() => dishes
-    .filter((item) => item.id && isDishOrderableToday(item, menuDay))
+    .filter((item) => isDishFeaturedForDay(item, menuDay, today))
     .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || item.published_at || '') || 0 }))
     .sort((a, b) => b.date - a.date || a.index - b.index)
     .slice(0, 3)
-    .map(({ item }) => item), [dishes, menuDay]);
+    .map(({ item }) => item), [dishes, menuDay, today]);
 
   const popularDishes = useMemo(() => {
     const sorted = dishes
-    .filter((item) => item.id && isDishOrderableToday(item, menuDay) && (!categoryMatcher || categoryMatcher.test(dishTypeText(item))))
+    .filter((item) => isDishFeaturedForDay(item, menuDay, today) && (!categoryMatcher || categoryMatcher.test(dishTypeText(item))))
     .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || '') || 0 }))
     .sort((a, b) => Number(!!b.item.is_featured) - Number(!!a.item.is_featured) || b.date - a.date || a.index - b.index)
     .map(({ item }) => item);
@@ -302,11 +309,11 @@ export default function HomeScreen({ navigation }) {
       return true;
     }).slice(0, 4);
     return [...first, ...sorted.filter((item) => !first.includes(item))];
-  }, [dishes, menuDay, categoryMatcher]);
+  }, [dishes, menuDay, today, categoryMatcher]);
 
   const recentRestaurants = useMemo(() => {
     const latestMenuDate = new Map();
-    dishes.filter((dish) => isDishOrderableToday(dish, menuDay)).forEach((dish) => {
+    dishes.filter((dish) => isDishFeaturedForDay(dish, menuDay, today)).forEach((dish) => {
       const restaurantId = dish._restaurant?.id;
       if (!restaurantId) return;
       const date = Date.parse(dish.created_at || dish.createdAt || dish.published_at || dish.updated_at || '') || 0;
@@ -314,14 +321,14 @@ export default function HomeScreen({ navigation }) {
     });
     return restaurants
       .filter((restaurant) => latestMenuDate.has(restaurant.id))
-      .filter((restaurant) => !categoryMatcher || dishes.some((dish) => dish._restaurant?.id === restaurant.id && isDishOrderableToday(dish, menuDay) && categoryMatcher.test(dishTypeText(dish))))
+      .filter((restaurant) => !categoryMatcher || dishes.some((dish) => dish._restaurant?.id === restaurant.id && isDishFeaturedForDay(dish, menuDay, today) && categoryMatcher.test(dishTypeText(dish))))
       .map((restaurant) => ({ restaurant, date: latestMenuDate.get(restaurant.id) || Date.parse(restaurant.updated_at || '') || 0 }))
       .sort((a, b) => b.date - a.date || Number(b.restaurant.id) - Number(a.restaurant.id))
       .slice(0, 3)
       .map(({ restaurant }) => restaurant);
-  }, [restaurants, dishes, categoryMatcher, menuDay]);
+  }, [restaurants, dishes, categoryMatcher, menuDay, today]);
 
-  const promoDish = useMemo(() => dishes.find((dish) => isDishOrderableToday(dish, menuDay) && Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [dishes, menuDay]);
+  const promoDish = useMemo(() => dishes.find((dish) => isDishFeaturedForDay(dish, menuDay, today) && Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [dishes, menuDay, today]);
   const promoPercent = promoDish ? Math.round((1 - Number(promoDish.discount_price) / Number(promoDish.price)) * 100) : 0;
 
   useDerivedValue(() => {
@@ -447,6 +454,7 @@ export default function HomeScreen({ navigation }) {
             <Ionicons name="options-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
+        {!showSearch && <MenuDaySelector />}
 
         {showSearch ? (
           <View style={styles.results}>
@@ -476,7 +484,7 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
 
             <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>🔥 Nos Plats Populaires</Text>{popularDishes.length > 4 && <TouchableOpacity onPress={() => setShowAllPopular((value) => !value)} style={styles.seeAll}><Text style={styles.seeAllText}>{showAllPopular ? 'Voir moins' : 'Voir tout'}</Text><Ionicons name={showAllPopular ? 'chevron-up' : 'arrow-forward'} size={16} color={COLORS.primary} /></TouchableOpacity>}</View>
-            {popularDishes.length > 0 ? <View style={styles.dishGrid}>{popularDishes.slice(0, showAllPopular ? undefined : 4).map((dish) => <HomeDishCard key={`${dish._restaurant?.id}-${dish.id}`} item={dish} liked={isFavorite('item', dish.id)} onLike={async () => { const ok = await toggleFavorite('item', { ...dish, restaurant: dish._restaurant }); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View> : menusLoading ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>Aucun plat disponible ce {menuDay.label}.</Text>}
+            {popularDishes.length > 0 ? <View style={styles.dishGrid}>{popularDishes.slice(0, showAllPopular ? undefined : 4).map((dish) => <HomeDishCard key={`${dish._restaurant?.id}-${dish.id}`} item={dish} previewOnly={!isDishOrderableToday(dish, today)} liked={isFavorite('item', dish.id)} onLike={async () => { const ok = await toggleFavorite('item', { ...dish, restaurant: dish._restaurant }); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View> : menusLoading ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>Aucun plat prévu ce {menuDay.label}.</Text>}
 
             <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>Restaurants récents</Text><TouchableOpacity onPress={openAllRestaurants} style={styles.seeAll}><Text style={styles.seeAllText}>Voir tout</Text><Ionicons name="chevron-forward" size={17} color={COLORS.primary} /></TouchableOpacity></View>
             {recentRestaurants.length > 0 ? (
