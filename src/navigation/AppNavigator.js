@@ -9,6 +9,7 @@ import AuthNavigator   from './AuthNavigator';
 import TabNavigator    from './TabNavigator';
 import RestoTabNavigator from './RestoTabNavigator';
 import RestaurantScreen        from '../screens/menu/RestaurantScreen';
+import RestaurantListScreen    from '../screens/menu/RestaurantListScreen';
 import ItemDetailScreen        from '../screens/menu/ItemDetailScreen';
 import CheckoutScreen          from '../screens/cart/CheckoutScreen';
 import MobilePaymentScreen     from '../screens/cart/MobilePaymentScreen';
@@ -16,6 +17,7 @@ import GfsPaymentScreen        from '../screens/cart/GfsPaymentScreen';
 import OrderConfirmationScreen from '../screens/cart/OrderConfirmationScreen';
 import OrderDetailScreen       from '../screens/orders/OrderDetailScreen';
 import OrderTrackingScreen     from '../screens/orders/OrderTrackingScreen';
+import OrdersScreen            from '../screens/orders/OrdersScreen';
 import AddAddressScreen        from '../screens/profile/AddAddressScreen';
 import AddressesScreen         from '../screens/profile/AddressesScreen';
 import EditProfileScreen       from '../screens/profile/EditProfileScreen';
@@ -61,6 +63,7 @@ export default function AppNavigator() {
 
         {/* Menu browsing */}
         <Stack.Screen name="Restaurant"         component={RestaurantScreen} />
+        <Stack.Screen name="RestaurantList"     component={RestaurantListScreen} />
         <Stack.Screen name="ItemDetail"         component={ItemDetailScreen} />
 
         {/* Auth screens */}
@@ -73,6 +76,7 @@ export default function AppNavigator() {
         <Stack.Screen name="OrderConfirmation"  component={OrderConfirmationScreen} />
         <Stack.Screen name="OrderDetail"        component={OrderDetailScreen} />
         <Stack.Screen name="OrderTracking"      component={OrderTrackingScreen} />
+        <Stack.Screen name="Orders"             component={OrdersScreen} />
         <Stack.Screen name="AddAddress"         component={AddAddressScreen} />
         <Stack.Screen name="Addresses"          component={AddressesScreen} />
         <Stack.Screen name="EditProfile"        component={EditProfileScreen} />

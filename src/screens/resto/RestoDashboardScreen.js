@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, RefreshControl, Alert,
@@ -108,7 +109,7 @@ export default function RestoDashboardScreen({ navigation }) {
       const res = await restoDashboardService.toggleOpen(!isOpen);
       setIsOpen(!!res.is_open);
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de modifier le statut.');
+      showAlert('Erreur', 'Impossible de modifier le statut.');
     } finally {
       setTogglingOpen(false);
     }

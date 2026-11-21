@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable,
@@ -12,10 +13,12 @@ import { useDeliveryLocation, distanceKm } from '../../context/DeliveryLocationC
 import { restaurantService } from '../../services/restaurantService';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, Badge, SmartImage, QuantityStepper } from '../../components/ui';
+import { dishFallbackImage } from '../../theme/images';
+import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
 
-const { width } = Dimensions.get('window');
-const HEADER_H = 320;
-const SHEET_OVERLAP = 30;
+const { width, height } = Dimensions.get('window');
+const HEADER_H = Math.max(420, Math.min(Math.round(height * 0.68), 680));
+const SHEET_OVERLAP = 42;
 const SUGGEST_W = 150;
 const OPTION_W = 128;
 
@@ -73,7 +76,7 @@ function getAllImages(item) {
 }
 
 // ── En-tête photo plein écran (sous la barre d'état) ──
-function ImageCarousel({ images, onBack, liked, onLike, onShare, topInset, rating, ratingCount }) {
+function ImageCarousel({ images, fallbackSource, onBack, liked, onLike, onShare, topInset, rating, ratingCount }) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const onScroll = (e) => {
@@ -84,7 +87,7 @@ function ImageCarousel({ images, onBack, liked, onLike, onShare, topInset, ratin
   return (
     <View style={styles.imageContainer}>
       {images.length === 0 ? (
-        <SmartImage style={styles.carouselImage} fallbackIcon="restaurant-outline" iconSize={72} />
+        <SmartImage style={styles.carouselImage} fallbackSource={fallbackSource} fallbackIcon="restaurant-outline" iconSize={72} />
       ) : (
         <FlatList
           data={images}
@@ -95,7 +98,7 @@ function ImageCarousel({ images, onBack, liked, onLike, onShare, topInset, ratin
           onScroll={onScroll}
           scrollEventThrottle={16}
           renderItem={({ item: img }) => (
-            <SmartImage uri={img} style={styles.carouselImage} fallbackIcon="restaurant-outline" iconSize={72} />
+            <SmartImage uri={img} fallbackSource={fallbackSource} style={styles.carouselImage} fallbackIcon="restaurant-outline" iconSize={72} />
           )}
         />
       )}
@@ -228,6 +231,7 @@ function SuggestionCard({ dish, liked, onLike, onPress, onAdd }) {
 }
 
 export default function ItemDetailScreen({ route, navigation }) {
+  const menuDay = useMenuDay();
   const { item, restaurant } = route.params;
   const { addItem, items } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -270,11 +274,11 @@ export default function ItemDetailScreen({ route, navigation }) {
       .then(data => {
         if (!alive) return;
         const all = (data?.menu || []).flatMap(c => (Array.isArray(c.items) ? c.items : []));
-        setSuggestions(all.filter(d => d.id !== item.id && d.is_available !== false).slice(0, 8));
+        setSuggestions(all.filter(d => d.id !== item.id && isDishOrderableToday(d, menuDay)).slice(0, 8));
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, [restaurant?.id, item.id]);
+  }, [restaurant?.id, item.id, menuDay]);
 
   // Les prix peuvent arriver en chaîne depuis l'API : toujours comparer en nombres
   const basePrice = Number(item.price) || 0;
@@ -291,17 +295,15 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   const allImages = getAllImages(item);
   const optionGroups = (item.option_groups || []).filter(g => (g.items || []).length > 0);
-  const inCart = items.find(i => i.id === item.id);
+  const inCart = items.find(i => i.id === item.id && String(i._cartRestaurant?.id) === String(restaurant?.id));
   const inCartQty = inCart?.quantity || 0;
 
   const itemName = clean(item.name);
   const description = clean(item.description);
-  const isAvailable = item.is_available !== false && item.is_available !== 0;
+  const isAvailable = isDishOrderableToday(item, menuDay);
   const hint = availabilityHint(description);
-  // Menu du jour : jours de service envoyés par le serveur (null = tous les jours)
-  const servedDays = item.available_days_label || null;
-  const unavailableLabel = servedDays ? `Servi le ${servedDays}` : 'Indisponible';
-  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : unavailableLabel;
+  const availabilityLabel = isAvailable ? (hint && !/indisponib/i.test(hint) ? hint : 'Disponible') : getDishUnavailableLabel(item, menuDay);
+  const scheduledLater = !isAvailable && availabilityLabel !== 'Indisponible';
 
   // Restaurant
   const restoRating = Number(restaurant?.rating) || 0;
@@ -321,11 +323,12 @@ export default function ItemDetailScreen({ route, navigation }) {
   if (item.is_spicy) tiles.push({ icon: 'flame-outline', title: 'Épicé', sub: 'Relevé' });
   if (item.is_vegetarian) tiles.push({ icon: 'leaf-outline', title: 'Végétarien', sub: 'Sans viande' });
   if (item.calories) tiles.push({ icon: 'nutrition-outline', title: `${item.calories} kcal`, sub: 'Énergie' });
-  if (servedDays) tiles.push({ icon: 'calendar-outline', title: servedDays.charAt(0).toUpperCase() + servedDays.slice(1), sub: 'Jours de service', color: isAvailable ? undefined : COLORS.danger });
   if (tiles.length < 4) {
     tiles.push(isAvailable
       ? { icon: 'checkmark-circle-outline', title: 'Disponible', sub: 'Statut', color: COLORS.success }
-      : { icon: 'close-circle-outline', title: 'Indisponible', sub: 'Statut', color: COLORS.danger });
+      : scheduledLater
+        ? { icon: 'calendar-outline', title: 'Autre jour', sub: 'Disponibilité', color: COLORS.primary }
+        : { icon: 'close-circle-outline', title: 'Indisponible', sub: 'Statut', color: COLORS.danger });
   }
 
   const showToast = (msg) => {
@@ -357,7 +360,7 @@ export default function ItemDetailScreen({ route, navigation }) {
     if (!isAvailable || adding) return;
     for (const group of optionGroups) {
       if (group.is_required && (!selections[group.id] || selections[group.id].length === 0)) {
-        Alert.alert('Option requise', `Veuillez choisir : ${clean(group.name)}`);
+        showAlert('Option requise', `Veuillez choisir : ${clean(group.name)}`);
         return;
       }
     }
@@ -375,7 +378,7 @@ export default function ItemDetailScreen({ route, navigation }) {
     setAdding(mode);
     let added = true;
     try {
-      // addItem demande confirmation si le panier contient un autre restaurant
+      // Le panier regroupe les plats par restaurant.
       added = await addItem(
         { ...item, effective_price: totalUnitPrice, selected_options: selectedOptions },
         quantity,
@@ -393,6 +396,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   // Ajout rapide depuis « Vous aimerez aussi »
   const openDish = (dish) => navigation.push('ItemDetail', { item: dish, restaurant });
   const quickAdd = async (dish) => {
+    if (!isDishOrderableToday(dish, menuDay)) { showToast(getDishUnavailableLabel(dish, menuDay)); return; }
     if ((dish.option_groups || []).some(g => g.is_required)) { openDish(dish); return; }
     const added = await addItem({ ...dish, effective_price: pricing(dish).effective }, 1, restaurant);
     if (added !== false) showToast(`${clean(dish.name)} ajouté au panier`);
@@ -411,6 +415,7 @@ export default function ItemDetailScreen({ route, navigation }) {
       >
         <ImageCarousel
           images={allImages}
+          fallbackSource={dishFallbackImage(item)}
           onBack={() => navigation.goBack()}
           liked={liked}
           onLike={onLike}
@@ -472,9 +477,9 @@ export default function ItemDetailScreen({ route, navigation }) {
           <View style={styles.availabilityRow}>
             <Badge
               label={availabilityLabel}
-              icon={isAvailable ? 'checkmark-circle' : 'close-circle'}
-              color={isAvailable ? COLORS.success : COLORS.danger}
-              bg={isAvailable ? COLORS.successSoft : COLORS.dangerSoft}
+              icon={isAvailable ? 'checkmark-circle' : scheduledLater ? 'calendar-outline' : 'close-circle'}
+              color={isAvailable ? COLORS.success : scheduledLater ? COLORS.primaryDark : COLORS.danger}
+              bg={isAvailable ? COLORS.successSoft : scheduledLater ? COLORS.primarySoft : COLORS.dangerSoft}
             />
             {inCartQty > 0 ? (
               <Badge label={`Déjà ${inCartQty} au panier`} icon="cart" color={COLORS.primary} bg={COLORS.primarySoft} />
@@ -552,7 +557,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                 <Ionicons name={isAvailable ? 'cart-outline' : 'close-circle-outline'} size={26} color={COLORS.white} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.addMainTitle} numberOfLines={1}>
-                    {!isAvailable ? (servedDays ? "Pas servi aujourd'hui" : 'Indisponible') : adding === 'cart' ? 'Ajout…' : 'Ajouter au panier'}
+                    {!isAvailable ? availabilityLabel : adding === 'cart' ? 'Ajout…' : 'Ajouter au panier'}
                   </Text>
                   <Text style={styles.addMainSub} numberOfLines={1}>{formatPrice(totalPrice)}</Text>
                 </View>

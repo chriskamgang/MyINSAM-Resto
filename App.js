@@ -16,6 +16,7 @@ import { CartProvider } from './src/context/CartContext';
 import { MarketProvider } from './src/context/MarketContext';
 import { DeliveryLocationProvider } from './src/context/DeliveryLocationContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
+import { MenuDayProvider } from './src/context/MenuDayContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { COLORS } from './src/theme';
 import { useOtaUpdates } from './src/hooks/useOtaUpdates';
@@ -49,8 +50,10 @@ export default function App() {
             <DeliveryLocationProvider>
               <CartProvider>
                 <MarketProvider>
-                  <StatusBar style="dark" translucent />
-                  <AppNavigator />
+                  <MenuDayProvider>
+                    <StatusBar style="dark" translucent />
+                    <AppNavigator />
+                  </MenuDayProvider>
                 </MarketProvider>
               </CartProvider>
             </DeliveryLocationProvider>

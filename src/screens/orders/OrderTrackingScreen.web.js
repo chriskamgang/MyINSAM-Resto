@@ -14,7 +14,7 @@ export default function OrderTrackingScreen({ navigation }) {
           title="Carte disponible sur mobile"
           message="Le suivi sur carte s'affiche dans l'application Android ou iOS."
           actionLabel="Retour aux commandes"
-          onAction={() => navigation.navigate('Main', { screen: 'Commandes' })}
+          onAction={() => navigation.navigate('Orders')}
         />
       </View>
     </Screen>

@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Alert, Linking,
@@ -49,7 +50,7 @@ export default function RestoOrderDetailScreen({ route, navigation }) {
       const data = await restoDashboardService.getOrder(orderId);
       setOrder(data);
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de charger la commande.');
+      showAlert('Erreur', 'Impossible de charger la commande.');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -63,16 +64,16 @@ export default function RestoOrderDetailScreen({ route, navigation }) {
   }, [orderId]);
 
   const handleStatusChange = (newStatus, confirmMsg) => {
-    Alert.alert('Confirmer', confirmMsg, [
+    showAlert('Confirmer', confirmMsg, [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Confirmer', style: newStatus === 'cancelled' ? 'destructive' : 'default', onPress: async () => {
         setActing(true);
         try {
           await restoDashboardService.updateOrderStatus(orderId, newStatus);
           await loadOrder();
-          Alert.alert('Succès', 'Statut mis à jour.');
+          showAlert('Succès', 'Statut mis à jour.');
         } catch (e) {
-          Alert.alert('Erreur', e.response?.data?.message || 'Impossible de modifier le statut.');
+          showAlert('Erreur', e.response?.data?.message || 'Impossible de modifier le statut.');
         } finally { setActing(false); }
       }},
     ]);
@@ -81,7 +82,7 @@ export default function RestoOrderDetailScreen({ route, navigation }) {
   const callClient = () => {
     const phone = order?.user?.phone;
     if (phone) Linking.openURL(`tel:${phone}`);
-    else Alert.alert('Erreur', 'Numéro non disponible.');
+    else showAlert('Erreur', 'Numéro non disponible.');
   };
 
   const callDriver = () => {

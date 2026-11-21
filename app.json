@@ -15,8 +15,8 @@
       "backgroundColor": "#ffffff"
     },
     "extra": {
-      "privacyPolicyUrl": "https://votresite.com/privacy",
-      "termsOfServiceUrl": "https://votresite.com/terms",
+      "privacyPolicyUrl": null,
+      "termsOfServiceUrl": null,
       "supportEmail": "support@myinsam.cm",
       "supportPhone": "+237659339778",
       "eas": {

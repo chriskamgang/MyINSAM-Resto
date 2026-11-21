@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Linking,
@@ -121,7 +122,7 @@ export default function MarketOrderDetailScreen({ route, navigation }) {
       setOrder(data);
     } catch (e) {
       if (!silent) {
-        Alert.alert('Erreur', 'Impossible de charger la commande.');
+        showAlert('Erreur', 'Impossible de charger la commande.');
         navigation.goBack();
       }
     } finally {
@@ -142,7 +143,7 @@ export default function MarketOrderDetailScreen({ route, navigation }) {
 
   const handleValidatePhotos = async (approved) => {
     if (!approved && !changeNote.trim()) {
-      Alert.alert('Note requise', 'Veuillez indiquer les changements souhaités.');
+      showAlert('Note requise', 'Veuillez indiquer les changements souhaités.');
       return;
     }
 
@@ -154,17 +155,17 @@ export default function MarketOrderDetailScreen({ route, navigation }) {
       });
       setShowChangeInput(false);
       setChangeNote('');
-      Alert.alert('Succès', approved ? 'Achats validés !' : 'Demande de changement envoyée.');
+      showAlert('Succès', approved ? 'Achats validés !' : 'Demande de changement envoyée.');
       loadOrder(true);
     } catch (e) {
-      Alert.alert('Erreur', e.response?.data?.message || 'Une erreur est survenue.');
+      showAlert('Erreur', e.response?.data?.message || 'Une erreur est survenue.');
     } finally {
       setValidating(false);
     }
   };
 
   const handleCancel = () => {
-    Alert.alert(
+    showAlert(
       'Annuler la commande',
       'Voulez-vous vraiment annuler cette commande marché ?',
       [
@@ -176,7 +177,7 @@ export default function MarketOrderDetailScreen({ route, navigation }) {
               await marketService.cancelOrder(orderId);
               loadOrder(true);
             } catch (e) {
-              Alert.alert('Erreur', e.response?.data?.message || 'Impossible d\'annuler la commande.');
+              showAlert('Erreur', e.response?.data?.message || 'Impossible d\'annuler la commande.');
             }
           },
         },

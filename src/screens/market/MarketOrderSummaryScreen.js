@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/showAlert';
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
@@ -94,12 +95,12 @@ export default function MarketOrderSummaryScreen({ navigation }) {
 
   const handleConfirm = async () => {
     if (!selectedAddress) {
-      Alert.alert('Adresse manquante', 'Veuillez sélectionner une adresse de livraison.');
+      showAlert('Adresse manquante', 'Veuillez sélectionner une adresse de livraison.');
       return;
     }
 
     if (paymentMethod === 'mobile_money' && !mobilePhone.trim()) {
-      Alert.alert('Téléphone manquant', 'Veuillez saisir votre numéro de téléphone pour le paiement mobile.');
+      showAlert('Téléphone manquant', 'Veuillez saisir votre numéro de téléphone pour le paiement mobile.');
       return;
     }
 
@@ -126,7 +127,7 @@ export default function MarketOrderSummaryScreen({ navigation }) {
       navigation.replace('MarketOrderDetail', { orderId: order.id });
     } catch (e) {
       const msg = e.response?.data?.message || 'Une erreur est survenue lors de la création de la commande.';
-      Alert.alert('Erreur', msg);
+      showAlert('Erreur', msg);
     } finally {
       setLoading(false);
     }

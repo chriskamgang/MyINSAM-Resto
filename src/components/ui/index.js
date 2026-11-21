@@ -1,9 +1,9 @@
 // Composants UI partagés Estuaire Eat. Tous les écrans s'appuient dessus
 // pour garder un design cohérent (voir src/theme).
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator,
-  StyleSheet, StatusBar, Pressable,
+  StyleSheet, StatusBar, Pressable, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -156,13 +156,16 @@ export function Input({ label, icon, error, right, style, inputStyle, multiline,
 // ── Barre de recherche ──
 export function SearchBar({ value, onChangeText, placeholder = 'Rechercher un plat ou un restaurant', onFilterPress, onSubmit, autoFocus, style, editable = true, onPress }) {
   const Wrapper = onPress ? TouchableOpacity : View;
+  const [focused, setFocused] = useState(false);
   return (
-    <Wrapper style={[styles.search, style]} onPress={onPress} activeOpacity={0.9}>
+    <Wrapper style={[styles.search, style, focused && styles.searchFocused]} onPress={onPress} activeOpacity={0.9}>
       <Ionicons name="search" size={18} color={COLORS.primary} />
       <TextInput
-        style={styles.searchInput}
+        style={[styles.searchInput, Platform.OS === 'web' && styles.searchInputWeb]}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder={placeholder}
         placeholderTextColor={COLORS.textLight}
         returnKeyType="search"
@@ -243,24 +246,31 @@ export function SectionHeader({ title, icon, actionLabel = 'Voir tout', onAction
 
 // ── Image distante avec repli propre (fond dégradé + icône discrète) ──
 // Évite les gros blocs gris vides quand un plat n'a pas de photo.
-export function SmartImage({ uri, source, style, fallbackIcon = 'restaurant-outline', iconSize = 28, resizeMode = 'cover', children }) {
+export function SmartImage({ uri, source, fallbackSource, style, fallbackIcon = 'restaurant-outline', iconSize = 28, resizeMode = 'cover', children }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const url = source ? null : getImageUrl(uri);
+  useEffect(() => { setFailed(false); setLoaded(false); }, [url, source]);
   const hasImage = source || (url && !failed);
+  const fillImage = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' };
   return (
     <View style={[{ overflow: 'hidden', backgroundColor: COLORS.surfaceAlt }, style]}>
-      {hasImage ? (
-        <Image
-          source={source || { uri: url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode={resizeMode}
-          onError={() => setFailed(true)}
-        />
-      ) : (
+      {fallbackSource && (!hasImage || !loaded) ? (
+        <Image source={fallbackSource} style={fillImage} resizeMode={resizeMode} />
+      ) : !hasImage ? (
         <LinearGradient colors={['#FFF4EC', '#FFE6D6']} style={[StyleSheet.absoluteFill, styles.fallback]}>
           <Ionicons name={fallbackIcon} size={iconSize} color="#F3B79A" />
         </LinearGradient>
-      )}
+      ) : null}
+      {hasImage ? (
+        <Image
+          source={source || { uri: url }}
+          style={[fillImage, fallbackSource && !loaded && { opacity: 0 }]}
+          resizeMode={resizeMode}
+          onError={() => setFailed(true)}
+          onLoad={() => setLoaded(true)}
+        />
+      ) : null}
       {children}
     </View>
   );
@@ -411,6 +421,8 @@ const styles = StyleSheet.create({
     paddingLeft: 14, paddingRight: 4, height: 46, ...SHADOWS.sm,
   },
   searchInput: { flex: 1, fontFamily: FONTS.regular, fontSize: 14, color: COLORS.text, paddingVertical: 0 },
+  searchInputWeb: { outlineStyle: 'none', outlineWidth: 0 },
+  searchFocused: { borderColor: COLORS.primary, ...(Platform.OS === 'web' ? { boxShadow: '0 0 0 3px rgba(255,107,53,0.15)' } : SHADOWS.primary) },
   searchFilter: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primarySoft,
     alignItems: 'center', justifyContent: 'center',

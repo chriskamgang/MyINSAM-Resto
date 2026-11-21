@@ -4,13 +4,18 @@ import {
   RefreshControl, Dimensions, Modal, StatusBar, FlatList, Linking, Share, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { restaurantService } from '../../services/restaurantService';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
-import { IconButton, SmartImage, EmptyState, LoadingView } from '../../components/ui';
+import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
+import { dishFallbackImage } from '../../theme/images';
+import { getDishUnavailableLabel, isDishFeaturedForDay, isDishOrderableToday, isDishScheduledForDay } from '../../hooks/useMenuDay';
+import { useMenuDaySelection } from '../../context/MenuDayContext';
+import MenuDaySelector from '../../components/MenuDaySelector';
 
 const { width, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = 205;
@@ -20,8 +25,9 @@ const TOP_BAR_H = 56;
 const GRID_GAP = 10;
 const CARD_SIDE = 14;
 const CARD_W = (width - CARD_SIDE * 2 - GRID_GAP) / 2;
-const POPULAR_LIMIT = 6;
+const POPULAR_LIMIT = 4;
 const PROMO_GIFT = require('../../../assets/images/restaurant-promo-gift.webp');
+const HERO_FALLBACK = require('../../../assets/images/home-grill-hero.jpg');
 
 // ── Utilitaires ──
 const clean = (s) => (typeof s === 'string' ? s.trim().replace(/\s+/g, ' ') : s);
@@ -124,7 +130,6 @@ function parseOpeningHours(raw) {
   });
   return rows;
 }
-const TODAY_KEY = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()];
 // « 23:00 » → « 23h », « 22:30 » → « 22h30 »
 const hourLabel = (hhmm) => {
   if (!hhmm) return null;
@@ -211,20 +216,19 @@ function CategoryTile({ label, icon, active, onPress }) {
 }
 
 // ── Carte de plat (grille 2 colonnes) ──
-function DishCard({ item, liked, onLike, onPress, onAdd }) {
+function DishCard({ item, liked, onLike, onPress, onAdd, day, today }) {
   const { price, effective, hasPromo, percent } = pricing(item);
   const desc = clean(item.description);
-  const unavailable = item.is_available === false;
+  const unavailable = !isDishOrderableToday(item, today);
+  const futureMenu = day.key !== today.key && isDishFeaturedForDay(item, day, today);
 
   return (
     <TouchableOpacity style={styles.dishCard} onPress={() => onPress(item)} activeOpacity={0.9}>
-      <SmartImage uri={item.image} style={styles.dishImage} iconSize={30}>
-        {unavailable ? (
-          <View style={styles.dishUnavailable}>
-            <Text style={styles.dishUnavailableText} numberOfLines={3}>
-              {item.available_days_label ? `Servi le ${item.available_days_label}` : 'Indisponible'}
-            </Text>
-          </View>
+      <SmartImage uri={item.image} fallbackSource={dishFallbackImage(item)} style={styles.dishImage} iconSize={30}>
+        {unavailable ? futureMenu ? (
+          <View style={styles.dishSchedulePill}><Ionicons name="calendar-outline" size={11} color={COLORS.primaryDark} /><Text style={styles.dishScheduleText}>Disponible {day.label}</Text></View>
+        ) : (
+          <View style={styles.dishUnavailable}><Text style={styles.dishUnavailableText} numberOfLines={2}>{getDishUnavailableLabel(item, today)}</Text></View>
         ) : null}
         {hasPromo ? (
           <View style={[styles.dishTag, { backgroundColor: COLORS.success }]}>
@@ -257,6 +261,8 @@ function DishCard({ item, liked, onLike, onPress, onAdd }) {
 }
 
 export default function RestaurantScreen({ route, navigation }) {
+  const { today, selectedDay: menuDay } = useMenuDaySelection();
+  const isFocused = useIsFocused();
   const { restaurant: routeRestaurant } = route.params;
   const { addItem, totalItems, subtotal } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -266,6 +272,7 @@ export default function RestaurantScreen({ route, navigation }) {
   const [restaurant, setRestaurant] = useState(routeRestaurant);
   const [categories, setCategories] = useState([]);
   const [filter, setFilter] = useState('all'); // 'all' | 'promos' | id de catégorie
+  const [search, setSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -294,18 +301,12 @@ export default function RestaurantScreen({ route, navigation }) {
   const loadMenu = useCallback(async () => {
     try {
       setError(false);
-      // Le menu ne renvoie qu'un sous-ensemble du restaurant : on charge aussi la fiche
-      // complète (adresse, téléphone, horaires, coordonnées) sans bloquer si elle échoue.
-      const [menuRes, detailRes] = await Promise.allSettled([
-        restaurantService.getMenu(routeRestaurant.id),
-        restaurantService.getRestaurant(routeRestaurant.id),
-      ]);
-      if (detailRes.status === 'fulfilled' && detailRes.value && typeof detailRes.value === 'object') {
-        const detail = detailRes.value.data && detailRes.value.data.id ? detailRes.value.data : detailRes.value;
-        setRestaurant(prev => ({ ...prev, ...detail }));
-      }
-      if (menuRes.status === 'rejected') throw menuRes.reason;
-      const data = menuRes.value || {};
+      // Les détails enrichissent la fiche en arrière-plan sans retarder l'affichage du menu.
+      restaurantService.getRestaurant(routeRestaurant.id).then((response) => {
+        const detail = response?.data?.id ? response.data : response;
+        if (detail?.id) setRestaurant((prev) => ({ ...prev, ...detail }));
+      }).catch(() => {});
+      const data = await restaurantService.getMenu(routeRestaurant.id) || {};
       if (data.restaurant) setRestaurant(prev => ({ ...prev, ...data.restaurant }));
       setCategories(data.menu || []);
     } catch (e) {
@@ -317,7 +318,12 @@ export default function RestaurantScreen({ route, navigation }) {
     }
   }, [routeRestaurant.id]);
 
-  useEffect(() => { loadMenu(); }, []);
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    loadMenu();
+    const timer = setInterval(loadMenu, 60000);
+    return () => clearInterval(timer);
+  }, [isFocused, loadMenu, today.key]);
   const onRefresh = () => { setRefreshing(true); loadMenu(); };
 
   // Les catégories sans plat ne sont jamais affichées
@@ -326,7 +332,10 @@ export default function RestaurantScreen({ route, navigation }) {
     [categories]
   );
   const allItems = useMemo(() => visibleCategories.flatMap(c => c.items), [visibleCategories]);
-  const promoItems = useMemo(() => allItems.filter(i => pricing(i).hasPromo), [allItems]);
+  const selectedItems = useMemo(() => allItems.filter((item) => isDishScheduledForDay(item, menuDay)), [allItems, menuDay]);
+  const featuredItems = useMemo(() => selectedItems.filter((item) => isDishFeaturedForDay(item, menuDay, today)), [selectedItems, menuDay, today]);
+  const heroDish = featuredItems.find((item) => item.is_featured && item.image) || featuredItems.find((item) => item.image);
+  const promoItems = useMemo(() => featuredItems.filter(i => pricing(i).hasPromo), [featuredItems]);
   const maxPercent = promoItems.reduce((m, i) => Math.max(m, pricing(i).percent), 0);
 
   // Filtre courant (retombe sur « Tous » si la catégorie n'existe plus)
@@ -334,22 +343,27 @@ export default function RestaurantScreen({ route, navigation }) {
   const activeFilter = filter === 'promos' ? (promoItems.length ? 'promos' : 'all') : (currentCategory ? filter : 'all');
 
   const popularSorted = useMemo(
-    () => [...allItems].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)),
-    [allItems]
+    () => [...selectedItems].sort((a, b) => Number(isDishFeaturedForDay(b, menuDay, today)) - Number(isDishFeaturedForDay(a, menuDay, today)) || Number(!!b.is_featured) - Number(!!a.is_featured)),
+    [selectedItems, menuDay, today]
   );
+  const query = clean(search).toLocaleLowerCase('fr');
   let gridItems; let sectionTitle;
   if (activeFilter === 'promos') { gridItems = promoItems; sectionTitle = 'Promotions'; }
   else if (activeFilter === 'all') {
-    gridItems = showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
-    sectionTitle = allItems.some((item) => item.is_featured) ? 'Nos plats populaires' : 'Tous les plats';
-  } else { gridItems = currentCategory.items; sectionTitle = labelize(currentCategory.name); }
-  const canExpand = activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
+    gridItems = query || showAll ? popularSorted : popularSorted.slice(0, POPULAR_LIMIT);
+    sectionTitle = query ? `Résultats du ${menuDay.label}` : `Menu du ${menuDay.label}`;
+  } else { gridItems = currentCategory.items.filter((item) => isDishScheduledForDay(item, menuDay)); sectionTitle = labelize(currentCategory.name); }
+  if (query) {
+    gridItems = gridItems.filter((item) => `${item.name || ''} ${item.description || ''} ${visibleCategories.find((category) => category.id === item.menu_category_id)?.name || ''}`.toLocaleLowerCase('fr').includes(query));
+    sectionTitle = `Résultats du ${menuDay.label}`;
+  }
+  const canExpand = !query && activeFilter === 'all' && popularSorted.length > POPULAR_LIMIT;
 
   const isOpen = !!restaurant.is_open;
   const hasOpenStatus = restaurant.is_open != null;
   const photos = Array.isArray(restaurant.photos) ? restaurant.photos : [];
   const hours = useMemo(() => parseOpeningHours(restaurant.opening_hours), [restaurant.opening_hours]);
-  const todayHours = hours.find(h => h.key === TODAY_KEY);
+  const todayHours = hours.find(h => h.key === today.key);
   const closeLabel = hourLabel(todayHours?.close);
   const addressLine = [clean(restaurant.address), clean(restaurant.city)].filter(Boolean).join(', ');
   const hasPracticalInfo = addressLine || restaurant.phone || hours.length > 0 || Number(restaurant.minimum_order) > 0;
@@ -362,6 +376,7 @@ export default function RestaurantScreen({ route, navigation }) {
 
   // Ajout rapide : pas de connexion exigée (panier invité, connexion demandée au paiement)
   const handleAdd = async (item) => {
+    if (!isDishOrderableToday(item, today)) { toast.show(getDishUnavailableLabel(item, today)); return false; }
     // Un plat avec options obligatoires doit passer par la fiche pour les choisir
     const needsChoice = (item.option_groups || []).some(g => g.is_required);
     if (needsChoice) { openItem(item); return false; }
@@ -432,8 +447,8 @@ export default function RestaurantScreen({ route, navigation }) {
     return (
       <View style={[styles.menuSection, { minHeight: SCREEN_H - topBarH - 90 }]}>
         {/* Bannière promo : uniquement s'il existe de vraies réductions */}
-        {promoItems.length > 0 && activeFilter !== 'promos' ? (
-          <LinearGradient colors={['#FFAE12', '#FF7907', '#FF5F06']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.promo}>
+        {promoItems.length > 0 && activeFilter !== 'promos' && !query ? (
+          <LinearGradient colors={['#1C0B06', '#582009', '#FF7100']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.promo}>
             <Image source={PROMO_GIFT} style={styles.promoGift} resizeMode="contain" />
             <View style={{ flex: 1 }}>
               <Text style={styles.promoBig}>-{maxPercent}%</Text>
@@ -460,22 +475,24 @@ export default function RestaurantScreen({ route, navigation }) {
           )}
         </View>
 
-        <View style={styles.grid}>
+        {gridItems.length ? <View style={styles.grid}>
           {gridItems.map(item => (
             <DishCard
               key={item.id}
               item={item}
+              day={menuDay}
+              today={today}
               liked={isFavorite('item', item.id)}
               onLike={onLikeItem}
               onPress={openItem}
               onAdd={handleAdd}
             />
           ))}
-        </View>
+        </View> : <EmptyState icon="calendar-outline" title={query ? 'Aucun plat trouvé' : `Aucun plat le ${menuDay.label}`} message={query ? `Aucun plat du ${menuDay.label} ne correspond à « ${clean(search)} ».` : `Ce restaurant n’a pas de plat prévu le ${menuDay.label}. Choisissez un autre jour.`} actionLabel={query ? 'Effacer la recherche' : undefined} onAction={() => setSearch('')} />}
 
         {canExpand && !showAll ? (
           <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAll(true)} activeOpacity={0.85}>
-            <Text style={styles.moreBtnText}>Voir les {popularSorted.length} plats</Text>
+            <Text style={styles.moreBtnText}>Voir les {popularSorted.length} plats du {menuDay.label}</Text>
             <Ionicons name="chevron-down" size={16} color={COLORS.primary} />
           </TouchableOpacity>
         ) : null}
@@ -490,6 +507,7 @@ export default function RestaurantScreen({ route, navigation }) {
       <Animated.ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={[1]}
         scrollEventThrottle={16}
         onScroll={Animated.event(
@@ -503,8 +521,15 @@ export default function RestaurantScreen({ route, navigation }) {
       >
         {/* ── Couverture + identité + bandeau d'infos ── */}
         <View onLayout={e => setStickY(e.nativeEvent.layout.height)}>
-          <SmartImage uri={restaurant.cover_image || restaurant.logo} style={styles.hero} fallbackIcon="restaurant" iconSize={56}>
-            <LinearGradient colors={['rgba(0,0,0,0.45)', 'transparent']} style={styles.heroTopFade} pointerEvents="none" />
+          <SmartImage uri={heroDish?.image || restaurant.cover_image || restaurant.logo} fallbackSource={HERO_FALLBACK} style={styles.hero}>
+            <LinearGradient colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.25)', 'transparent']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <View style={[styles.heroBrand, { top: insets.top + 48 }]} pointerEvents="none">
+              <SmartImage uri={restaurant.logo} style={styles.heroLogo} fallbackIcon="restaurant" iconSize={35} />
+              <View style={styles.heroBrandCopy}>
+                <Text style={styles.heroBrandName} numberOfLines={2}>{clean(restaurant.name)}</Text>
+                <Text style={styles.heroBrandSub} numberOfLines={1}>{cuisine}</Text>
+              </View>
+            </View>
             {photos.length > 0 ? (
               <TouchableOpacity
                 style={styles.photoCountBtn}
@@ -520,10 +545,6 @@ export default function RestaurantScreen({ route, navigation }) {
           {/* Feuille blanche au bord arrondi qui recouvre le bas de la photo */}
           <View style={styles.sheet}>
             <View style={styles.identity}>
-              <View style={styles.logoWrap}>
-                <SmartImage uri={restaurant.logo} style={styles.logo} fallbackIcon="storefront-outline" iconSize={30} />
-                {restaurant.is_verified === true && <View style={styles.verified}><Ionicons name="checkmark" size={14} color={COLORS.white} /></View>}
-              </View>
               <View style={styles.identityText}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name} numberOfLines={2}>{clean(restaurant.name)}</Text>
@@ -572,6 +593,10 @@ export default function RestaurantScreen({ route, navigation }) {
               </View>
             </View>
           </View>
+          <View style={styles.restaurantSearchRow}>
+            <SearchBar value={search} onChangeText={setSearch} placeholder={`Rechercher un plat chez ${clean(restaurant.name)}...`} style={styles.restaurantSearch} />
+          </View>
+          <MenuDaySelector />
         </View>
 
         {/* ── Tuiles de catégories collantes (seulement les catégories non vides) ── */}
@@ -659,8 +684,8 @@ export default function RestaurantScreen({ route, navigation }) {
                   <View style={styles.hoursList}>
                     {hours.map(h => (
                       <View key={h.key} style={styles.hoursRow}>
-                        <Text style={[styles.hoursDay, h.key === TODAY_KEY && styles.hoursToday]}>{h.label}</Text>
-                        <Text style={[styles.hoursValue, h.key === TODAY_KEY && styles.hoursToday]}>{h.value}</Text>
+                        <Text style={[styles.hoursDay, h.key === today.key && styles.hoursToday]}>{h.label}</Text>
+                        <Text style={[styles.hoursValue, h.key === today.key && styles.hoursToday]}>{h.value}</Text>
                       </View>
                     ))}
                   </View>
@@ -775,7 +800,7 @@ export default function RestaurantScreen({ route, navigation }) {
           { route: 'Accueil', icon: 'home', label: 'Accueil' },
           { route: 'Marché', icon: 'basket-outline', label: 'Marché' },
           { route: 'Panier', icon: 'cart-outline', label: 'Panier', center: true },
-          { route: 'Commandes', icon: 'receipt-outline', label: 'Commandes' },
+          { route: 'Favoris', icon: 'heart-outline', label: 'Favoris' },
           { route: 'Profil', icon: 'person-outline', label: 'Profil' },
         ].map((tab) => (
           <TouchableOpacity key={tab.route} style={styles.bottomNavItem} onPress={() => navigation.navigate('Main', { screen: tab.route })} activeOpacity={0.8}>
@@ -792,10 +817,15 @@ export default function RestaurantScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFDFC' },
+  container: { flex: 1, backgroundColor: '#FFF8F3' },
 
   // ── Couverture ──
   hero: { width: '100%', height: HERO_HEIGHT },
+  heroBrand: { position: 'absolute', left: 18, right: 70, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroLogo: { width: 75, height: 75, borderRadius: 38, borderWidth: 2, borderColor: '#FF9D11', backgroundColor: '#160B08' },
+  heroBrandCopy: { flex: 1 },
+  heroBrandName: { fontFamily: FONTS.extrabold, fontSize: 20, lineHeight: 24, color: COLORS.white, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 6 },
+  heroBrandSub: { fontFamily: FONTS.medium, fontSize: 11, color: '#FFF0DD', marginTop: 2 },
   heroTopFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   photoCountBtn: {
     position: 'absolute', right: SCREEN_PADDING, bottom: SHEET_OVERLAP + 12,
@@ -826,18 +856,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30, borderTopRightRadius: 30,
     paddingHorizontal: SCREEN_PADDING, paddingBottom: 3,
   },
-  identity: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  logoWrap: { marginTop: -30 },
-  logo: {
-    width: 88, height: 88, borderRadius: 44,
-    borderWidth: 4, borderColor: COLORS.surface,
-    ...SHADOWS.md,
-  },
-  verified: {
-    position: 'absolute', right: 4, bottom: 4,
-    width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.primary,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: COLORS.surface,
-  },
+  identity: { flexDirection: 'row', alignItems: 'flex-end' },
   identityText: { flex: 1, paddingTop: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontFamily: FONTS.bold, fontSize: 20, lineHeight: 25, color: COLORS.text, flexShrink: 1 },
@@ -865,11 +884,14 @@ const styles = StyleSheet.create({
   openText: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16 },
   openSub: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 12, color: COLORS.textMuted },
 
+  restaurantSearchRow: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 8, backgroundColor: '#FFF8F3' },
+  restaurantSearch: { height: 48, borderRadius: 25, borderWidth: 1, borderColor: '#F4D8C7', backgroundColor: COLORS.white, ...SHADOWS.sm },
+
   // ── Tuiles catégories ──
-  stickyWrap: { backgroundColor: '#FFFDFC', zIndex: 2 },
-  tilesContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 2 },
+  stickyWrap: { backgroundColor: '#FFF8F3', zIndex: 2 },
+  tilesContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 5 },
   tile: {
-    width: 54, height: 48, borderRadius: 24,
+    width: 65, height: 55, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2,
   },
   tileIdle: { backgroundColor: COLORS.surface, ...SHADOWS.sm },
@@ -884,7 +906,7 @@ const styles = StyleSheet.create({
     borderRadius: 17, paddingHorizontal: 9, height: 73, marginBottom: 11, ...SHADOWS.primary,
   },
   promoGift: { width: 80, height: 76, marginTop: -3 },
-  promoBig: { fontFamily: FONTS.extrabold, fontSize: 22, lineHeight: 26, color: COLORS.white },
+  promoBig: { fontFamily: FONTS.extrabold, fontSize: 23, lineHeight: 27, color: '#FFCE31' },
   promoSub: { fontFamily: FONTS.medium, fontSize: 10, lineHeight: 12, color: COLORS.white },
   promoBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -919,7 +941,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,20,31,0.45)',
     alignItems: 'center', justifyContent: 'center',
   },
-  dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 12, color: COLORS.white, textAlign: 'center', paddingHorizontal: 8 },
+  dishUnavailableText: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 16, color: COLORS.white, textAlign: 'center', marginHorizontal: 10 },
+  dishSchedulePill: { position: 'absolute', bottom: 6, left: 6, right: 6, minHeight: 23, borderRadius: 12, paddingHorizontal: 7, backgroundColor: 'rgba(255,248,243,0.96)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  dishScheduleText: { fontFamily: FONTS.semibold, fontSize: 10, color: COLORS.primaryDark },
   dishBody: { padding: 8, paddingTop: 6, flex: 1 },
   dishName: { fontFamily: FONTS.semibold, fontSize: 11, lineHeight: 14, color: COLORS.text },
   dishDesc: { fontFamily: FONTS.regular, fontSize: 9, lineHeight: 11, color: COLORS.textMuted, marginTop: 2 },
