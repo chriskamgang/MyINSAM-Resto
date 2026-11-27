@@ -25,11 +25,11 @@ import {
 import DeliveryLocationSheet from '../../components/DeliveryLocationSheet';
 import RestaurantFeatureCard from '../../components/RestaurantFeatureCard';
 const HERO_IMAGE = require('../../../assets/images/home-grill-hero.png');
-const CLOCHE_IMAGE = require('../../../assets/images/home-cloche-banner.png');
 const PROMO_GIFT = require('../../../assets/images/restaurant-promo-gift.png');
 
 const { width } = Dimensions.get('window');
 const BANNER_WIDTH = width;
+const CATEGORY_WIDTH = Math.max(48, Math.min(55, (width - 28 - 5 * 6) / 6));
 const CATEGORY_SPRITE = require('../../../assets/images/home-categories.png');
 const CAMEROON_DISH_IMAGE = require('../../../assets/images/category-cameroon-ndole.png');
 const GRILLADES_IMAGE = require('../../../assets/images/category-grillades.png');
@@ -62,7 +62,7 @@ function CategoryItem({ category, active, onPress }) {
   return (
     <TouchableOpacity style={styles.catItem} onPress={onPress} activeOpacity={0.8}>
       <View style={[styles.catTile, active && styles.catTileActive]}>
-        {category.id === 'all' ? <MaterialCommunityIcons name="room-service-outline" size={38} color={active ? '#fff' : COLORS.primary} style={{ marginTop: 6 }} /> : category.image ? <Image source={category.image} resizeMode="cover" style={styles.catImage} /> : category.imageIndex != null ? <Image source={CATEGORY_SPRITE} resizeMode="stretch" style={{ position: 'absolute', width: 250, height: 84, left: -category.imageIndex * 50, top: -5 }} /> : img ? <Image source={img} style={styles.catImage} /> : <Ionicons name={categoryIcon(category.name)} size={25} color={COLORS.primary} />}
+        {category.id === 'all' ? <MaterialCommunityIcons name="room-service-outline" size={29} color={active ? '#fff' : COLORS.primary} style={{ marginTop: 4 }} /> : category.image ? <Image source={category.image} resizeMode="cover" style={styles.catImage} /> : category.imageIndex != null ? <Image source={CATEGORY_SPRITE} resizeMode="stretch" style={{ position: 'absolute', width: 180, height: 60, left: (CATEGORY_WIDTH - 36) / 2 - category.imageIndex * 36, top: -7 }} /> : img ? <Image source={img} style={styles.catImage} /> : <Ionicons name={categoryIcon(category.name)} size={22} color={COLORS.primary} />}
         <Text style={[styles.catLabel, active && styles.catLabelActive]} numberOfLines={1}>{category.name}</Text>
       </View>
     </TouchableOpacity>
@@ -139,7 +139,7 @@ function HomeDishCard({ item, liked, onLike, onPress, onAdd, previewOnly }) {
 
 export default function HomeScreen({ navigation }) {
   const isFocused = useIsFocused();
-  const { today, selectedDay: menuDay } = useMenuDaySelection();
+  const { today, selectedDay: menuDay, isTodaySelected } = useMenuDaySelection();
   const tabSpace = useTabBarSpace();
   const { user } = useAuth();
   const { addItem } = useCart();
@@ -162,8 +162,6 @@ export default function HomeScreen({ navigation }) {
   const [hasMore, setHasMore]         = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const loadedMenus = useRef(new Set());
-  const scrollRef = useRef(null);
-  const categoryYRef = useRef(0);
   const bannerRef = useAnimatedRef();
   const bannerOffset = useSharedValue(0);
   const brandIntro = useSharedValue(0);
@@ -259,8 +257,9 @@ export default function HomeScreen({ navigation }) {
   }, [hasMore, loadingMore, page, loadDishes]);
 
   const q = search.trim().toLowerCase();
-  const categoryMatcher = FOOD_CATEGORIES.find((c) => c.id === activeCat)?.matcher;
+  const categoryMatcher = q ? FOOD_CATEGORIES.find((c) => c.id === activeCat)?.matcher : null;
   const selectCategory = (id) => { setActiveCat(id === 'all' ? null : id); setFeatureIndex(0); setShowAllPopular(false); };
+  useEffect(() => { if (!q) setActiveCat(null); }, [q]);
   useEffect(() => {
     if ((q.length >= 2 || activeCat) && !loading && hasMore && !loadingMore) loadMore();
   }, [q, activeCat, loading, hasMore, loadingMore, loadMore]);
@@ -348,7 +347,7 @@ export default function HomeScreen({ navigation }) {
       .map(({ restaurant }) => restaurant);
   }, [restaurants, visibleMenuDishes]);
 
-  const promoDish = useMemo(() => visibleMenuDishes.find((dish) => Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [visibleMenuDishes]);
+  const promoDish = useMemo(() => visibleMenuDishes.find((dish) => isDishOrderableToday(dish, today) && Number(dish.discount_price) > 0 && Number(dish.discount_price) < Number(dish.price)), [visibleMenuDishes, today]);
   const promoPercent = promoDish ? Math.round((1 - Number(promoDish.discount_price) / Number(promoDish.price)) * 100) : 0;
 
   useDerivedValue(() => {
@@ -401,7 +400,6 @@ export default function HomeScreen({ navigation }) {
   return (
     <Screen edges={[]} bg="#FFF8F3" statusBar="light-content">
       <ScrollView
-        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: tabSpace + 20 }}
@@ -470,15 +468,12 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.searchRow}>
           <SearchBar value={search} onChangeText={setSearch} placeholder="Rechercher un plat ou un restaurant..." style={styles.searchInput} />
-          <TouchableOpacity style={styles.filterButton} onPress={() => scrollRef.current?.scrollTo({ y: categoryYRef.current, animated: true })} accessibilityLabel="Voir les catégories">
-            <Ionicons name="options-outline" size={24} color="#fff" />
-          </TouchableOpacity>
         </View>
         {!showSearch && <MenuDaySelector />}
 
         {showSearch ? (
           <View style={styles.results}>
-            <View onLayout={(event) => { categoryYRef.current = event.nativeEvent.layout.y; }}>
+            <View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
                 {FOOD_CATEGORIES.map((category) => <CategoryItem key={category.id} category={category} active={(activeCat || 'all') === category.id} onPress={() => selectCategory(category.id)} />)}
               </ScrollView>
@@ -490,21 +485,20 @@ export default function HomeScreen({ navigation }) {
           </View>
         ) : (
           <>
-            <View onLayout={(event) => { categoryYRef.current = event.nativeEvent.layout.y; }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-                {FOOD_CATEGORIES.map((category) => <CategoryItem key={category.id} category={category} active={(activeCat || 'all') === category.id} onPress={() => selectCategory(category.id)} />)}
-              </ScrollView>
+            <View style={styles.dayInfo}>
+              <Ionicons name={isTodaySelected ? 'checkmark-circle-outline' : 'calendar-outline'} size={15} color={COLORS.primary} />
+              <Text style={styles.dayInfoText}>{menusLoading ? 'Chargement des plats du jour…' : isTodaySelected ? `${dayDishes.length} plat${dayDishes.length === 1 ? '' : 's'} à découvrir aujourd’hui` : `Aperçu du ${menuDay.label} · disponibles ce jour-là`}</Text>
             </View>
 
-            <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>🍽 Plats du {menuDay.label}</Text>{dayDishes.length > 4 && <TouchableOpacity onPress={() => setShowAllPopular((value) => !value)} style={styles.seeAll}><Text style={styles.seeAllText}>{showAllPopular ? 'Voir moins' : 'Voir tout'}</Text><Ionicons name={showAllPopular ? 'chevron-up' : 'arrow-forward'} size={16} color={COLORS.primary} /></TouchableOpacity>}</View>
+            <View style={[styles.sectionHeader, { marginTop: 9 }]}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>🍽 Plats du {menuDay.label}</Text>{dayDishes.length > 4 && <TouchableOpacity onPress={() => setShowAllPopular((value) => !value)} style={styles.seeAll}><Text style={styles.seeAllText}>{showAllPopular ? 'Voir moins' : 'Voir tout'}</Text><Ionicons name={showAllPopular ? 'chevron-up' : 'arrow-forward'} size={16} color={COLORS.primary} /></TouchableOpacity>}</View>
             {dayDishes.length > 0 ? <View style={styles.dishGrid}>{dayDishes.slice(0, showAllPopular ? undefined : 4).map((dish) => <HomeDishCard key={`${dish._restaurant?.id}-${dish.id}`} item={dish} previewOnly={!isDishOrderableToday(dish, today)} liked={isFavorite('item', dish.id)} onLike={async () => { const ok = await toggleFavorite('item', { ...dish, restaurant: dish._restaurant }); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View> : menusLoading ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>Aucun plat prévu ce {menuDay.label}.</Text>}
 
-            <TouchableOpacity style={styles.promoBanner} onPress={() => promoDish ? openDish(promoDish) : openAllRestaurants()} activeOpacity={0.9}>
+            {promoDish && <TouchableOpacity style={styles.promoBanner} onPress={() => openDish(promoDish)} activeOpacity={0.9}>
               <LinearGradient colors={['#1D0D09', '#5E1904', '#FF7100']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
               <Image source={PROMO_GIFT} style={styles.promoGift} resizeMode="contain" />
-              <View style={styles.promoCopy}><Text style={styles.promoLead}>{promoDish ? 'Profitez de' : 'Découvrez nos'}</Text><Text style={styles.promoBig}>{promoDish ? `−${promoPercent}%` : 'saveurs'}</Text><Text style={styles.promoSmall}>{promoDish ? `sur ${promoDish.name}` : 'Préparées pour vous'}</Text></View>
-              <View style={styles.promoAction}><Text style={styles.promoActionText}>Commander</Text><Ionicons name="arrow-forward" color="#111" size={14} /></View>
-            </TouchableOpacity>
+              <View style={styles.promoCopy}><Text style={styles.promoLead}>Offre du jour</Text><Text style={styles.promoBig}>{`−${promoPercent}%`}</Text><Text style={styles.promoSmall} numberOfLines={1}>{promoDish.name}</Text></View>
+              <View style={styles.promoAction}><Text style={styles.promoActionText}>Voir le plat</Text><Ionicons name="arrow-forward" color="#111" size={14} /></View>
+            </TouchableOpacity>}
 
             <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>Restaurants récents</Text><TouchableOpacity onPress={openAllRestaurants} style={styles.seeAll}><Text style={styles.seeAllText}>Voir tout</Text><Ionicons name="chevron-forward" size={17} color={COLORS.primary} /></TouchableOpacity></View>
             {recentRestaurants.length > 0 ? (
@@ -523,12 +517,6 @@ export default function HomeScreen({ navigation }) {
               </>
             ) : menusLoading || loadingMore || hasMore ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>{activeCat ? 'Aucun restaurant ne propose encore cette catégorie.' : 'Les nouveaux menus apparaîtront ici bientôt.'}</Text>}
 
-            <TouchableOpacity style={styles.clocheBanner} onPress={openAllRestaurants} activeOpacity={0.9}>
-              <Image source={CLOCHE_IMAGE} style={styles.fillImage} resizeMode="cover" />
-              <LinearGradient colors={['rgba(0,0,0,0.76)', 'rgba(0,0,0,0.2)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
-              <Text style={styles.clocheText}>Commande facile,{"\n"}<Text style={styles.clocheAccent}>rapide et savoureuse !</Text></Text>
-              <View style={styles.clocheAction}><Text style={styles.clocheActionText}>Commander</Text><Ionicons name="arrow-forward" size={15} color={COLORS.primary} /></View>
-            </TouchableOpacity>
             {error && <EmptyState icon="cloud-offline-outline" title="Connexion impossible" message="Vérifiez votre connexion internet puis réessayez." actionLabel="Réessayer" onAction={() => { setLoading(true); loadData(); }} />}
           </>
         )}
@@ -560,15 +548,16 @@ const styles = StyleSheet.create({
   heroDots: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   heroDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.8)' },
   heroDotActive: { backgroundColor: COLORS.primary, width: 13 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: -18, marginHorizontal: 14, marginBottom: 12, zIndex: 5 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', marginTop: -18, marginHorizontal: 14, marginBottom: 8, zIndex: 5 },
   searchInput: { flex: 1, height: 48, borderRadius: 25, borderWidth: 1, borderColor: '#FCE2D4', backgroundColor: '#fff', ...SHADOWS.sm },
-  filterButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderWidth: 2, borderColor: '#FF8D23', ...SHADOWS.primary },
-  catRow: { paddingHorizontal: 12, gap: 6, paddingTop: 5, paddingBottom: 10 },
-  catItem: { width: Math.max(56, (width - 28 - 5 * 6) / 6) },
-  catTile: { height: 79, borderRadius: 14, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'flex-end', ...SHADOWS.sm },
+  dayInfo: { marginHorizontal: 14, marginTop: 4, paddingHorizontal: 11, minHeight: 30, borderRadius: 15, backgroundColor: '#FFF0E8', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dayInfoText: { flex: 1, color: '#8A4321', fontFamily: FONTS.medium, fontSize: 11 },
+  catRow: { paddingHorizontal: 12, gap: 6, paddingTop: 3, paddingBottom: 6 },
+  catItem: { width: CATEGORY_WIDTH },
+  catTile: { height: 64, borderRadius: 13, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'flex-end', ...SHADOWS.sm },
   catTileActive: { backgroundColor: COLORS.primary },
-  catImage: { position: 'absolute', width: '100%', height: 57, top: 0 },
-  catLabel: { fontFamily: FONTS.semibold, fontSize: 9, color: '#172034', textAlign: 'center', paddingBottom: 5 },
+  catImage: { position: 'absolute', width: '100%', height: 45, top: 0 },
+  catLabel: { fontFamily: FONTS.semibold, fontSize: 9, color: '#172034', textAlign: 'center', paddingBottom: 4 },
   catLabelActive: { color: '#fff' },
   promoBanner: { marginHorizontal: 12, marginTop: 16, height: 85, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', ...SHADOWS.sm },
   promoGift: { width: 93, height: 87, marginLeft: -4 },
@@ -602,11 +591,6 @@ const styles = StyleSheet.create({
   featureDotActive: { width: 14, backgroundColor: COLORS.primary },
   featureLoading: { height: 158 },
   emptyText: { marginHorizontal: 15, padding: 20, color: COLORS.textMuted, textAlign: 'center' },
-  clocheBanner: { marginHorizontal: 12, marginTop: 12, height: 80, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 17, ...SHADOWS.sm },
-  clocheText: { flex: 1, color: '#fff', fontFamily: FONTS.bold, fontStyle: 'italic', fontSize: 15, lineHeight: 19 },
-  clocheAccent: { color: '#FFCB31' },
-  clocheAction: { height: 31, borderRadius: 17, backgroundColor: '#fff', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 3 },
-  clocheActionText: { fontFamily: FONTS.bold, color: '#111', fontSize: 9 },
   results: { paddingBottom: 20 },
   listPad: { paddingHorizontal: SCREEN_PADDING, gap: 12 },
   nearCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, ...SHADOWS.sm },
