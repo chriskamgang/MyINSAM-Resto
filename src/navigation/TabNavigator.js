@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, FONTS } from '../theme';
+import { createThemedStyles, COLORS, FONTS } from '../theme';
 import EstuaireTabBar from './EstuaireTabBar';
 import { Screen, EmptyState } from '../components/ui';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,6 +89,6 @@ export default function TabNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   loginPromptLink: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.semibold },
 });

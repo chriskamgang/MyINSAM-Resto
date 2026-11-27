@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { orderService } from '../../services/orderService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING } from '../../theme';
 import {
   Screen, ScreenHeader, IconButton, Card, Button, SmartImage, Rating, LoadingView, EmptyState,
 } from '../../components/ui';
@@ -664,7 +664,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   // Statut bannière
   statusBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 14,

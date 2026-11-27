@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import React, { useRef } from 'react';
+import { View, ActivityIndicator, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -22,6 +22,8 @@ import { COLORS } from './src/theme';
 import { useOtaUpdates } from './src/hooks/useOtaUpdates';
 
 export default function App() {
+  const colorScheme = useColorScheme();
+  const navigationState = useRef(null);
   useOtaUpdates();
   const [fontsLoaded, fontError] = useFonts({
     Poppins_400Regular,
@@ -51,8 +53,12 @@ export default function App() {
               <CartProvider>
                 <MarketProvider>
                   <MenuDayProvider>
-                    <StatusBar style="dark" translucent />
-                    <AppNavigator />
+                    <StatusBar style="auto" translucent />
+                    <AppNavigator
+                      key={colorScheme || 'light'}
+                      initialState={navigationState.current}
+                      onStateChange={(state) => { navigationState.current = state; }}
+                    />
                   </MenuDayProvider>
                 </MarketProvider>
               </CartProvider>

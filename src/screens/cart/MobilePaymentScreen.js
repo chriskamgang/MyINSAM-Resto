@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { paymentService } from '../../services/paymentService';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { Screen, ScreenHeader, Button, Input, Card, Badge } from '../../components/ui';
 
 // Couleurs de marque des opérateurs (accents uniquement)
@@ -265,7 +265,7 @@ export default function MobilePaymentScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   content: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8 },
   center: { textAlign: 'center' },
 

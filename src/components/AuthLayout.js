@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS } from '../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS } from '../theme';
 import { IMAGES } from '../theme/images';
 import { SmartImage } from './ui';
 
@@ -191,7 +191,7 @@ export function SocialButtons({ social, loginStyle = false }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   statusScrim: { position: 'absolute', top: 0, left: 0, right: 0 },
   root: { flex: 1, backgroundColor: COLORS.dark },
   loginBackground: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },

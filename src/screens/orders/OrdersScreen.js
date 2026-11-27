@@ -5,7 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { orderService } from '../../services/orderService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 import { Screen, Card, Chip, Badge, SmartImage, EmptyState, LoadingView, Divider, IconButton } from '../../components/ui';
 
@@ -243,7 +243,7 @@ export default function OrdersScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   header: { paddingHorizontal: SCREEN_PADDING, paddingTop: 12, paddingBottom: 14 },
   filters: { paddingHorizontal: SCREEN_PADDING, gap: 10, paddingBottom: 14, paddingTop: 2 },
   list: { paddingHorizontal: SCREEN_PADDING, paddingTop: 4 },

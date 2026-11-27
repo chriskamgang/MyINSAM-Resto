@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { restoDashboardService } from '../../services/restoDashboardService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import {
   Screen, ScreenHeader, Card, Button, Badge, SectionHeader, Divider, IconButton, LoadingView,
 } from '../../components/ui';
@@ -273,7 +273,7 @@ export default function RestoOrderDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   scroll: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 32 },
   section: { paddingHorizontal: 0, marginTop: 22, marginBottom: 12 },
 

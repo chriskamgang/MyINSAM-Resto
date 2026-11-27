@@ -11,7 +11,7 @@ import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useDeliveryLocation, distanceKm } from '../../context/DeliveryLocationContext';
 import { restaurantService } from '../../services/restaurantService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, Badge, SmartImage, QuantityStepper } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
 import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
@@ -405,7 +405,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle={allImages.length > 0 ? 'light-content' : 'dark-content'}
+        barStyle={allImages.length > 0 || COLORS.bg === '#101014' ? 'light-content' : 'dark-content'}
         backgroundColor="transparent"
         translucent
       />
@@ -628,7 +628,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { flex: 1, backgroundColor: COLORS.bg },
 
   // ── Photo ──

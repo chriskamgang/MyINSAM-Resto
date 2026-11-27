@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING } from '../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { useDeliveryLocation } from '../context/DeliveryLocationContext';
 import { profileService } from '../services/profileService';
@@ -104,7 +104,7 @@ export default function DeliveryLocationSheet({ visible, onClose, navigation }) 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   backdrop: { flex: 1, backgroundColor: COLORS.overlay },
   sheet: {
     backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xxl, borderTopRightRadius: RADIUS.xxl,

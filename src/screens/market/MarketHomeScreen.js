@@ -6,9 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { marketService } from '../../services/marketService';
-import {
-  COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice,
-} from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice, } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 import {
   Screen, Card, Badge, Button, SectionHeader, EmptyState, LoadingView, MetaItem, Divider,
@@ -213,7 +211,7 @@ export default function MarketHomeScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   header: { paddingHorizontal: SCREEN_PADDING, paddingTop: 12, paddingBottom: 6 },
 
   hero: { marginHorizontal: SCREEN_PADDING, marginTop: 12, marginBottom: 24, overflow: 'hidden' },

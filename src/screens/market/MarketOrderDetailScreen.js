@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { marketService } from '../../services/marketService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import {
   Screen, ScreenHeader, Card, Input, Button, Badge, SectionHeader, Divider, SmartImage,
   LoadingView, IconButton,
@@ -421,7 +421,7 @@ export default function MarketOrderDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   scroll: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 32 },
   section: { paddingHorizontal: 0, marginTop: 22, marginBottom: 12 },
 

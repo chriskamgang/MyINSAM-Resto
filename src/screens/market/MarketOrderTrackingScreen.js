@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { marketService } from '../../services/marketService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING } from '../../theme';
 import {
   Screen, ScreenHeader, Card, Button, IconButton, SectionHeader, LoadingView, Rating, Badge,
 } from '../../components/ui';
@@ -236,7 +236,7 @@ export default function MarketOrderTrackingScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   scroll: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8 },
   section: { paddingHorizontal: 0, marginTop: 22, marginBottom: 12 },
 

@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { restaurantService } from '../../services/restaurantService';
 import { useFavorites } from '../../context/FavoritesContext';
-import { COLORS, FONTS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, SCREEN_PADDING } from '../../theme';
 import { SearchBar, EmptyState } from '../../components/ui';
 import RestaurantFeatureCard from '../../components/RestaurantFeatureCard';
 const HEADER_IMAGE = require('../../../assets/images/home-grill-hero.png');
@@ -105,7 +105,7 @@ export default function RestaurantListScreen({ navigation, isTab = false }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   root: { flex: 1, backgroundColor: '#FFF8F3' },
   header: { height: 188, paddingHorizontal: SCREEN_PADDING, overflow: 'hidden', backgroundColor: '#1B0D05' },
   headerImage: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },

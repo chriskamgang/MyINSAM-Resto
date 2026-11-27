@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMarket } from '../../context/MarketContext';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import {
   Screen, ScreenHeader, Card, Input, Button, Chip, QuantityStepper, Badge,
 } from '../../components/ui';
@@ -251,7 +251,7 @@ export default function CreateMarketListScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   scroll: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 24 },
 
   suggestScroll: { marginHorizontal: -SCREEN_PADDING, marginTop: 14, marginBottom: 18 },

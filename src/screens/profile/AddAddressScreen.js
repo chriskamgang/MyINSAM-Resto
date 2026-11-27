@@ -12,7 +12,7 @@ import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import {
   Screen, ScreenHeader, Input, Button, Card, Chip, Badge, Divider,
 } from '../../components/ui';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING } from '../../theme';
 
 const LABELS = [
   { key: 'Maison', icon: 'home-outline' },
@@ -344,7 +344,7 @@ export default function AddAddressScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   content: { padding: SCREEN_PADDING, paddingTop: 8, paddingBottom: 32 },
 
   gpsCard: {

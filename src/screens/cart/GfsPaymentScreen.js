@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { paymentService } from '../../services/paymentService';
 import { useCart } from '../../context/CartContext';
-import { COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { Screen, ScreenHeader, Button, Card } from '../../components/ui';
 
 // Adresse de retour envoyée à GFS (même valeur que GFS_RETURN_URL côté serveur)
@@ -141,7 +141,7 @@ export default function GfsPaymentScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   hero: { alignItems: 'center', paddingVertical: 24 },
   illu: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   center: { textAlign: 'center' },

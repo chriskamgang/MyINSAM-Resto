@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMarket } from '../../context/MarketContext';
 import { marketService } from '../../services/marketService';
 import { profileService } from '../../services/profileService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import {
   Screen, ScreenHeader, Card, Input, Button, Badge, SectionHeader, Divider, EmptyState,
 } from '../../components/ui';
@@ -318,7 +318,7 @@ export default function MarketOrderSummaryScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   scroll: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 24 },
   section: { paddingHorizontal: 0, marginTop: 22, marginBottom: 12 },
 

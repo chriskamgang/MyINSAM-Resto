@@ -8,9 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { restoDashboardService } from '../../services/restoDashboardService';
-import {
-  COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice,
-} from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice, } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 import {
   Screen, Card, Badge, SectionHeader, SmartImage, EmptyState, LoadingView, MetaItem,
@@ -225,7 +223,7 @@ export default function RestoDashboardScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: SCREEN_PADDING, paddingTop: 12, paddingBottom: 4,

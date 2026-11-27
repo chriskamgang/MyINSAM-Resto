@@ -10,7 +10,7 @@ import Constants from 'expo-constants';
 import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
 import { Screen, Card, ListRow, Divider, SmartImage } from '../../components/ui';
-import { COLORS, FONTS, TYPE, SHADOWS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, SHADOWS, SCREEN_PADDING } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 
 const EXTRA = Constants.expoConfig?.extra || {};
@@ -258,7 +258,7 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   cover: { height: 202, paddingHorizontal: SCREEN_PADDING, overflow: 'hidden' },
   coverOrbLarge: { position: 'absolute', width: 230, height: 230, borderRadius: 115, borderWidth: 1, borderColor: 'rgba(255,198,112,0.35)', right: -78, top: 28 },
   coverOrbSmall: { position: 'absolute', width: 142, height: 142, borderRadius: 71, borderWidth: 1, borderColor: 'rgba(255,198,112,0.24)', right: -28, top: 72 },

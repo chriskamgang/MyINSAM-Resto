@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { orderService } from '../../services/orderService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import {
   Screen, ScreenHeader, Card, Badge, Button, SmartImage, LoadingView, EmptyState, Divider,
 } from '../../components/ui';
@@ -379,7 +379,7 @@ export default function OrderDetailScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   hero: { marginBottom: 6 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   heroIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },

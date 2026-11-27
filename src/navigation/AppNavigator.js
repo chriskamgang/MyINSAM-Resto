@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, useColorScheme } from 'react-native';
+import { COLORS } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import AuthNavigator   from './AuthNavigator';
@@ -33,7 +34,8 @@ import RestoOrderDetailScreen      from '../screens/resto/RestoOrderDetailScreen
 
 const Stack = createNativeStackNavigator();
 
-export default function AppNavigator() {
+export default function AppNavigator({ initialState, onStateChange }) {
+  const colorScheme = useColorScheme();
   const { user, loading } = useAuth();
   const [onboardingSeen, setOnboardingSeen] = useState(null);
 
@@ -54,7 +56,7 @@ export default function AppNavigator() {
   const isRestaurantAdmin = user?.role === 'restaurant_admin';
 
   return (
-    <NavigationContainer>
+    <NavigationContainer initialState={initialState} onStateChange={onStateChange} theme={{ ...(colorScheme === 'dark' ? DarkTheme : DefaultTheme), colors: { ...(colorScheme === 'dark' ? DarkTheme : DefaultTheme).colors, background: COLORS.bg, card: COLORS.surface, text: COLORS.text, border: COLORS.border, primary: COLORS.primary } }}>
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={onboardingSeen ? 'Main' : 'Auth'}>
         {/* Main screen — switches based on role */}
         <Stack.Screen name="Main" component={isRestaurantAdmin ? RestoTabNavigator : TabNavigator} />

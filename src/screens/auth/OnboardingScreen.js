@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, FONTS, TYPE, SHADOWS, RADIUS } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, SHADOWS, RADIUS } from '../../theme';
 import { IMAGES } from '../../theme/images';
 import { Button, SmartImage } from '../../components/ui';
 import { BrandMark } from '../../components/AuthLayout';
@@ -132,7 +132,7 @@ export default function OnboardingScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { flex: 1, backgroundColor: COLORS.dark },
   glow: {
     position: 'absolute', width: 360, height: 360, borderRadius: 180, top: -140, right: -120,

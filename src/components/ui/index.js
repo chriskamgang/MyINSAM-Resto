@@ -8,24 +8,24 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, themedScreenBackground, isDarkMode, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING } from '../../theme';
 import { getImageUrl } from '../../services/api';
 
 // ── Screen : conteneur d'écran avec safe area et fond crème ──
 // edges : quels bords protéger ('top', 'bottom'). Par défaut seulement le haut,
 // la barre d'onglets gère le bas.
-export function Screen({ children, style, edges = ['top'], bg = COLORS.bg, statusBar = 'dark-content' }) {
+export function Screen({ children, style, edges = ['top'], bg = COLORS.bg, statusBar }) {
   const insets = useSafeAreaInsets();
   return (
     <View
       style={[
-        { flex: 1, backgroundColor: bg },
+        { flex: 1, backgroundColor: themedScreenBackground(bg) },
         edges.includes('top') && { paddingTop: insets.top },
         edges.includes('bottom') && { paddingBottom: insets.bottom },
         style,
       ]}
     >
-      <StatusBar barStyle={statusBar} backgroundColor="transparent" translucent />
+      <StatusBar barStyle={statusBar || (isDarkMode() ? 'light-content' : 'dark-content')} backgroundColor="transparent" translucent />
       {children}
     </View>
   );
@@ -371,7 +371,7 @@ export function Divider({ style }) {
   return <View style={[{ height: 1, backgroundColor: COLORS.divider }, style]} />;
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SCREEN_PADDING, paddingVertical: 10, gap: 12,

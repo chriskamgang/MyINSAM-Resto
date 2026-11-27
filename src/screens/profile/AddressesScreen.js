@@ -11,7 +11,7 @@ import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import {
   Screen, ScreenHeader, IconButton, Card, Badge, Button, EmptyState, LoadingView, Divider,
 } from '../../components/ui';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING } from '../../theme';
 
 // Icône selon le libellé de l'adresse
 function addressIcon(label = '') {
@@ -185,7 +185,7 @@ export default function AddressesScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   list: { paddingHorizontal: SCREEN_PADDING, paddingTop: 8, paddingBottom: 24, gap: 14 },
 
   card: { borderWidth: 1.5, borderColor: 'transparent' },

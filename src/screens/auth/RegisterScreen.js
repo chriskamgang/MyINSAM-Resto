@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocialAuth, networkErrorMessage } from '../../hooks/useSocialAuth';
 import AuthLayout, { AuthError, OrDivider, SocialButtons } from '../../components/AuthLayout';
 import { Input, Button } from '../../components/ui';
-import { COLORS, FONTS } from '../../theme';
+import { createThemedStyles, COLORS, FONTS } from '../../theme';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
@@ -122,7 +122,7 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   footer: { alignItems: 'center', marginTop: 28, gap: 4 },
   footerText: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.textMuted },
   footerLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },

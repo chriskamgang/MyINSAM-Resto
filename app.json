@@ -6,7 +6,7 @@
     "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "description": "Commandez vos plats préférés et faites-vous livrer rapidement à Bafoussam. Livraison rapide, paiement sécurisé.",
     "splash": {

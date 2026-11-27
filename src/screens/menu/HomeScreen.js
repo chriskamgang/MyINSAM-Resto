@@ -13,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useDeliveryLocation } from '../../context/DeliveryLocationContext';
 import { useFavorites } from '../../context/FavoritesContext';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, isDarkMode, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 import { getDishUnavailableLabel, isDishFeaturedForDay, isDishOrderableToday } from '../../hooks/useMenuDay';
 import { useMenuDaySelection } from '../../context/MenuDayContext';
@@ -122,7 +122,7 @@ function HomeDishCard({ item, liked, onLike, onPress, onAdd, previewOnly }) {
         <LinearGradient colors={['rgba(0,0,0,0.24)', 'transparent']} style={StyleSheet.absoluteFill} />
         {badge && <View style={[styles.dishBadge, hasPromo && { backgroundColor: '#13A75B' }]}><Ionicons name={hasPromo ? 'pricetag' : 'star'} size={10} color="#fff" /><Text style={styles.dishBadgeText}>{badge}</Text></View>}
         <TouchableOpacity style={styles.dishHeart} onPress={onLike} accessibilityLabel={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'} hitSlop={6}>
-          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={17} color={liked ? COLORS.primary : '#171B22'} />
+          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={17} color={liked ? COLORS.primary : COLORS.text} />
         </TouchableOpacity>
       </SmartImage>
       <View style={styles.dishBody}>
@@ -487,18 +487,18 @@ export default function HomeScreen({ navigation }) {
         ) : (
           <>
             <View style={styles.dayInfo}>
-              <LinearGradient colors={['#FFF6EC', '#FFE8D6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={isDarkMode() ? ['#2D211D', '#38251E'] : ['#FFF6EC', '#FFE8D6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
               <View style={styles.dayInfoGlow} />
               <LinearGradient colors={['#FF9A36', '#FF632B']} style={styles.dayInfoIcon}>
                 <MaterialCommunityIcons name="silverware-fork-knife" size={20} color="#fff" />
               </LinearGradient>
               <View style={styles.dayInfoCopy}>
-                <Text style={styles.dayInfoKicker}>{isTodaySelected ? 'À TABLE AUJOURD’HUI' : `MENU DU ${menuDay.label.toUpperCase()}`}</Text>
+                <Text style={[styles.dayInfoKicker, isDarkMode() && { color: COLORS.secondary }]}>{isTodaySelected ? 'À TABLE AUJOURD’HUI' : `MENU DU ${menuDay.label.toUpperCase()}`}</Text>
                 <Text style={styles.dayInfoTitle} numberOfLines={1}>{menusLoading ? 'La sélection arrive…' : isTodaySelected ? 'Choisissez votre plat' : 'Découvrez les plats prévus'}</Text>
               </View>
               <View style={styles.dayInfoCount}>
                 <Text style={styles.dayInfoNumber}>{menusLoading ? '…' : dayDishes.length}</Text>
-                <Text style={styles.dayInfoCountLabel}>{isTodaySelected ? 'PLATS' : 'PRÉVUS'}</Text>
+                <Text style={[styles.dayInfoCountLabel, isDarkMode() && { color: COLORS.textMuted }]}>{isTodaySelected ? 'PLATS' : 'PRÉVUS'}</Text>
               </View>
             </View>
 
@@ -538,7 +538,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   fillImage: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
   hero: { width, overflow: 'hidden', backgroundColor: '#160B08' },
   heroSlide: { width },

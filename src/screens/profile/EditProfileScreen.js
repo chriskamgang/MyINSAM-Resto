@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { profileService } from '../../services/profileService';
 import { useAvatarUpload } from '../../hooks/useAvatarUpload';
 import { Screen, ScreenHeader, Input, Button, SmartImage } from '../../components/ui';
-import { COLORS, FONTS, TYPE, SHADOWS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, SHADOWS, SCREEN_PADDING } from '../../theme';
 
 export default function EditProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -121,7 +121,7 @@ export default function EditProfileScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   content: { padding: SCREEN_PADDING, paddingBottom: 32 },
 
   avatarSection: { alignItems: 'center', marginBottom: 28, marginTop: 4 },

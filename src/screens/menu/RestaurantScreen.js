@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { restaurantService } from '../../services/restaurantService';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IconButton, SmartImage, EmptyState, LoadingView, SearchBar } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
 import { getDishUnavailableLabel, isDishFeaturedForDay, isDishOrderableToday, isDishScheduledForDay } from '../../hooks/useMenuDay';
@@ -816,7 +816,7 @@ export default function RestaurantScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { flex: 1, backgroundColor: '#FFF8F3' },
 
   // ── Couverture ──

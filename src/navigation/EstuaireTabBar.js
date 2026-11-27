@@ -7,7 +7,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS, SHADOWS } from '../theme';
+import { createThemedStyles, COLORS, FONTS, SHADOWS } from '../theme';
 import { TAB_BAR_CONTENT_HEIGHT } from '../hooks/useTabBarSpace';
 
 const CENTER_SIZE = 58;
@@ -84,7 +84,7 @@ export default function EstuaireTabBar({ state, descriptors, navigation, centerR
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   bar: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
     flexDirection: 'row', alignItems: 'flex-start',

@@ -10,7 +10,7 @@ import { orderService } from '../../services/orderService';
 import { restaurantService } from '../../services/restaurantService';
 import { getMenuDay, isDishOrderableToday } from '../../hooks/useMenuDay';
 import { profileService } from '../../services/profileService';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { Screen, ScreenHeader, Button, Input, Card, Badge, Divider, MetaItem } from '../../components/ui';
 import { GFS_COLOR } from './GfsPaymentScreen';
 
@@ -612,7 +612,7 @@ export default function CheckoutScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   section: { marginBottom: 16 },
   stepTitle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   stepNum: {

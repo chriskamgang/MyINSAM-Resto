@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { profileService } from '../../services/profileService';
 import { Screen, ScreenHeader, Card, EmptyState, LoadingView } from '../../components/ui';
-import { COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SCREEN_PADDING } from '../../theme';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 
 const NOTIF_TYPES = {
@@ -158,7 +158,7 @@ export default function NotificationsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   list: { paddingHorizontal: SCREEN_PADDING, paddingTop: 4, gap: 12 },
   listHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

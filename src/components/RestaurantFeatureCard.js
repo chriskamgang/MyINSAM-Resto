@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, RADIUS, SHADOWS } from '../theme';
+import { createThemedStyles, COLORS, FONTS, RADIUS, SHADOWS } from '../theme';
 import { SmartImage } from './ui';
 
 const FALLBACK_COVER = require('../../assets/images/home-grill-hero.png');
@@ -40,7 +40,7 @@ export default function RestaurantFeatureCard({ restaurant, onPress, liked, onLi
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   card: { width: cardWidth, height: 154, borderRadius: 20, overflow: 'hidden', backgroundColor: '#17120F', ...SHADOWS.md },
   content: { position: 'absolute', left: 13, right: 42, bottom: 13, flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
   logoWrap: { width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: '#FFB338', overflow: 'hidden', backgroundColor: '#111' },

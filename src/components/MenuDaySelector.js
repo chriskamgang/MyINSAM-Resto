@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { MENU_DAYS } from '../hooks/useMenuDay';
 import { useMenuDaySelection } from '../context/MenuDayContext';
-import { COLORS, FONTS } from '../theme';
+import { createThemedStyles, COLORS, FONTS } from '../theme';
 
 const SHORT = { mon: 'Lun', tue: 'Mar', wed: 'Mer', thu: 'Jeu', fri: 'Ven', sat: 'Sam', sun: 'Dim' };
 
@@ -39,7 +39,7 @@ export default function MenuDaySelector({ style }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { paddingTop: 6, paddingBottom: 9, backgroundColor: '#FFF8F3' },
   heading: { paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
   headingLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },

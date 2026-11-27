@@ -8,7 +8,7 @@ import { authService } from '../../services/authService';
 import { networkErrorMessage } from '../../hooks/useSocialAuth';
 import AuthLayout, { AuthError } from '../../components/AuthLayout';
 import { Input, Button } from '../../components/ui';
-import { COLORS, FONTS, TYPE, RADIUS } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS } from '../../theme';
 
 const RESEND_DELAY = 60; // secondes avant de pouvoir redemander un code
 
@@ -153,7 +153,7 @@ export default function ForgotPasswordScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   info: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.successSoft,
     borderRadius: RADIUS.md, padding: 12, marginBottom: 14,

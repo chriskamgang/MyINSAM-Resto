@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, FONTS } from '../../theme';
+import { createThemedStyles, COLORS, FONTS } from '../../theme';
 import { BrandMark } from '../../components/AuthLayout';
 
 export default function SplashScreen({ navigation }) {
@@ -65,7 +65,7 @@ export default function SplashScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { flex: 1, backgroundColor: COLORS.dark, justifyContent: 'center', alignItems: 'center' },
   glow: { position: 'absolute', borderRadius: 999, backgroundColor: COLORS.primary, opacity: 0.12 },
   glowTop: { width: 320, height: 320, top: -120, right: -100 },

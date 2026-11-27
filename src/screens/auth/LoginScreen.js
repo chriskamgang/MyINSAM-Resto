@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocialAuth, networkErrorMessage } from '../../hooks/useSocialAuth';
 import AuthLayout, { AuthError, OrDivider, SocialButtons } from '../../components/AuthLayout';
 import { Input, Button } from '../../components/ui';
-import { COLORS, FONTS } from '../../theme';
+import { createThemedStyles, COLORS, FONTS } from '../../theme';
 
 const LAST_EMAIL_KEY = '@last_login_email';
 
@@ -111,7 +111,7 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   forgot: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 2, marginTop: 9, marginBottom: 17 },
   forgotText: { fontFamily: FONTS.medium, fontSize: 11, color: COLORS.primary },
   loginButton: { borderRadius: 30 },

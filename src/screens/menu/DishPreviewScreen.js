@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SmartImage } from '../../components/ui';
 import { dishFallbackImage } from '../../theme/images';
-import { COLORS, FONTS, SHADOWS, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, SHADOWS, formatPrice } from '../../theme';
 import useMenuDay, { getDishUnavailableLabel, isDishOrderableToday } from '../../hooks/useMenuDay';
 
 export default function DishPreviewScreen({ route, navigation }) {
@@ -73,7 +73,7 @@ export default function DishPreviewScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   screen: { flex: 1, backgroundColor: '#130A06' },
   topShade: { position: 'absolute', top: 0, left: 0, right: 0, height: 180 },
   bottomShade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '52%' },

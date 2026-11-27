@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFavorites } from '../../context/FavoritesContext';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, isDarkMode, COLORS, FONTS, TYPE, RADIUS, SHADOWS, GRADIENTS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { IMAGES } from '../../theme/images';
 import { useTabBarSpace } from '../../hooks/useTabBarSpace';
 import useMenuDay, { isDishOrderableToday, getDishUnavailableLabel } from '../../hooks/useMenuDay';
@@ -215,7 +215,7 @@ export default function CartScreen({ navigation }) {
   if (items.length === 0) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <StatusBar barStyle={isDarkMode() ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
         <CartHeader topInset={insets.top} onBack={goBack} />
         <View style={[styles.emptyWrap, { paddingBottom: tabSpace }]}>
           <EmptyState
@@ -252,7 +252,7 @@ export default function CartScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle={isDarkMode() ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -395,7 +395,7 @@ export default function CartScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   root: { flex: 1, backgroundColor: '#FFF9F6' },
 
   // En-tête

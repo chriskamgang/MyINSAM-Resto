@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFavorites } from '../../context/FavoritesContext';
-import { COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
+import { createThemedStyles, COLORS, FONTS, TYPE, RADIUS, SHADOWS, SCREEN_PADDING, formatPrice } from '../../theme';
 import { Screen, ScreenHeader, Chip, SmartImage, Rating, EmptyState, LoadingView } from '../../components/ui';
 
 export default function FavoritesScreen({ navigation, isTab = false }) {
@@ -85,7 +85,7 @@ export default function FavoritesScreen({ navigation, isTab = false }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   tabs: { flexDirection: 'row', gap: 10, paddingHorizontal: SCREEN_PADDING, paddingTop: 4, paddingBottom: 16 },
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10,
