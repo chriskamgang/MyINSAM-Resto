@@ -394,10 +394,10 @@ export default function ItemDetailScreen({ route, navigation }) {
   };
 
   // Ajout rapide depuis « Vous aimerez aussi »
-  const openDish = (dish) => navigation.push('ItemDetail', { item: dish, restaurant });
+  const openDish = (dish) => navigation.push('DishPreview', { item: dish, restaurant });
   const quickAdd = async (dish) => {
     if (!isDishOrderableToday(dish, menuDay)) { showToast(getDishUnavailableLabel(dish, menuDay)); return; }
-    if ((dish.option_groups || []).some(g => g.is_required)) { openDish(dish); return; }
+    if ((dish.option_groups || []).some(g => g.is_required)) { navigation.push('ItemDetail', { item: dish, restaurant }); return; }
     const added = await addItem({ ...dish, effective_price: pricing(dish).effective }, 1, restaurant);
     if (added !== false) showToast(`${clean(dish.name)} ajouté au panier`);
   };

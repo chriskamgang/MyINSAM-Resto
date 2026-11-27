@@ -299,11 +299,12 @@ export default function HomeScreen({ navigation }) {
   }, [q, restaurants, remoteRestaurants, searchDishes, dishes, categoryMatcher]);
 
   const openRestaurant = (restaurant) => navigation.navigate('Restaurant', { restaurant });
-  const openDish = (item) => navigation.navigate('ItemDetail', { item, restaurant: item._restaurant });
+  const openDish = (item) => navigation.navigate('DishPreview', { item, restaurant: item._restaurant });
+  const openOrderForm = (item) => navigation.navigate('ItemDetail', { item, restaurant: item._restaurant });
   const openAllRestaurants = () => navigation.navigate('RestaurantList');
   const addDish = (item) => {
     if (!isDishOrderableToday(item, today)) return openDish(item);
-    if ((item.option_groups || []).some((group) => group.is_required)) return openDish(item);
+    if ((item.option_groups || []).some((group) => group.is_required)) return openOrderForm(item);
     const price = Number(item.price) || 0;
     const promo = Number(item.discount_price) || 0;
     return addItem({ ...item, effective_price: promo > 0 && promo < price ? promo : price }, 1, item._restaurant);
@@ -486,8 +487,19 @@ export default function HomeScreen({ navigation }) {
         ) : (
           <>
             <View style={styles.dayInfo}>
-              <Ionicons name={isTodaySelected ? 'checkmark-circle-outline' : 'calendar-outline'} size={15} color={COLORS.primary} />
-              <Text style={styles.dayInfoText}>{menusLoading ? 'Chargement des plats du jour…' : isTodaySelected ? `${dayDishes.length} plat${dayDishes.length === 1 ? '' : 's'} à découvrir aujourd’hui` : `Aperçu du ${menuDay.label} · disponibles ce jour-là`}</Text>
+              <LinearGradient colors={['#FFF6EC', '#FFE8D6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <View style={styles.dayInfoGlow} />
+              <LinearGradient colors={['#FF9A36', '#FF632B']} style={styles.dayInfoIcon}>
+                <MaterialCommunityIcons name="silverware-fork-knife" size={20} color="#fff" />
+              </LinearGradient>
+              <View style={styles.dayInfoCopy}>
+                <Text style={styles.dayInfoKicker}>{isTodaySelected ? 'À TABLE AUJOURD’HUI' : `MENU DU ${menuDay.label.toUpperCase()}`}</Text>
+                <Text style={styles.dayInfoTitle} numberOfLines={1}>{menusLoading ? 'La sélection arrive…' : isTodaySelected ? 'Choisissez votre plat' : 'Découvrez les plats prévus'}</Text>
+              </View>
+              <View style={styles.dayInfoCount}>
+                <Text style={styles.dayInfoNumber}>{menusLoading ? '…' : dayDishes.length}</Text>
+                <Text style={styles.dayInfoCountLabel}>{isTodaySelected ? 'PLATS' : 'PRÉVUS'}</Text>
+              </View>
             </View>
 
             <View style={[styles.sectionHeader, { marginTop: 9 }]}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>🍽 Plats du {menuDay.label}</Text>{dayDishes.length > 4 && <TouchableOpacity onPress={() => setShowAllPopular((value) => !value)} style={styles.seeAll}><Text style={styles.seeAllText}>{showAllPopular ? 'Voir moins' : 'Voir tout'}</Text><Ionicons name={showAllPopular ? 'chevron-up' : 'arrow-forward'} size={16} color={COLORS.primary} /></TouchableOpacity>}</View>
@@ -550,8 +562,15 @@ const styles = StyleSheet.create({
   heroDotActive: { backgroundColor: COLORS.primary, width: 13 },
   searchRow: { flexDirection: 'row', alignItems: 'center', marginTop: -18, marginHorizontal: 14, marginBottom: 8, zIndex: 5 },
   searchInput: { flex: 1, height: 48, borderRadius: 25, borderWidth: 1, borderColor: '#FCE2D4', backgroundColor: '#fff', ...SHADOWS.sm },
-  dayInfo: { marginHorizontal: 14, marginTop: 4, paddingHorizontal: 11, minHeight: 30, borderRadius: 15, backgroundColor: '#FFF0E8', flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dayInfoText: { flex: 1, color: '#8A4321', fontFamily: FONTS.medium, fontSize: 11 },
+  dayInfo: { marginHorizontal: 14, marginTop: 4, paddingHorizontal: 10, height: 60, borderRadius: 17, borderWidth: 1, borderColor: '#FFD6BC', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 9, ...SHADOWS.sm },
+  dayInfoGlow: { position: 'absolute', right: 42, top: -21, width: 74, height: 74, borderRadius: 37, backgroundColor: 'rgba(255,255,255,0.24)' },
+  dayInfoIcon: { width: 37, height: 37, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  dayInfoCopy: { flex: 1, minWidth: 0 },
+  dayInfoKicker: { color: '#A75024', fontFamily: FONTS.bold, fontSize: 9, letterSpacing: 0.7 },
+  dayInfoTitle: { color: '#241B1A', fontFamily: FONTS.semibold, fontSize: 11, marginTop: 2 },
+  dayInfoCount: { minWidth: 48, height: 43, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#FFDBC4', alignItems: 'center', justifyContent: 'center' },
+  dayInfoNumber: { color: COLORS.primaryDark, fontFamily: FONTS.extrabold, fontSize: 18, lineHeight: 21 },
+  dayInfoCountLabel: { color: '#AA603B', fontFamily: FONTS.bold, fontSize: 7, letterSpacing: 0.4 },
   catRow: { paddingHorizontal: 12, gap: 6, paddingTop: 3, paddingBottom: 6 },
   catItem: { width: CATEGORY_WIDTH },
   catTile: { height: 64, borderRadius: 13, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'flex-end', ...SHADOWS.sm },

@@ -40,7 +40,7 @@ export default function FavoritesScreen({ navigation, isTab = false }) {
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('ItemDetail', { item: d, restaurant: d.restaurant })}
+        onPress={() => navigation.navigate('DishPreview', { item: d, restaurant: d.restaurant })}
       >
         <SmartImage uri={d.image} style={styles.image} iconSize={24} />
         <View style={{ flex: 1 }}>

@@ -11,6 +11,7 @@ import RestoTabNavigator from './RestoTabNavigator';
 import RestaurantScreen        from '../screens/menu/RestaurantScreen';
 import RestaurantListScreen    from '../screens/menu/RestaurantListScreen';
 import ItemDetailScreen        from '../screens/menu/ItemDetailScreen';
+import DishPreviewScreen       from '../screens/menu/DishPreviewScreen';
 import CheckoutScreen          from '../screens/cart/CheckoutScreen';
 import MobilePaymentScreen     from '../screens/cart/MobilePaymentScreen';
 import GfsPaymentScreen        from '../screens/cart/GfsPaymentScreen';
@@ -64,6 +65,7 @@ export default function AppNavigator() {
         {/* Menu browsing */}
         <Stack.Screen name="Restaurant"         component={RestaurantScreen} />
         <Stack.Screen name="RestaurantList"     component={RestaurantListScreen} />
+        <Stack.Screen name="DishPreview"        component={DishPreviewScreen} />
         <Stack.Screen name="ItemDetail"         component={ItemDetailScreen} />
 
         {/* Auth screens */}

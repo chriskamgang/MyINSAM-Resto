@@ -372,14 +372,14 @@ export default function RestaurantScreen({ route, navigation }) {
   const rating = Number(restaurant.rating) || 0;
   const ratingCount = Number(restaurant.ratings_count || restaurant.reviews_count) || 0;
 
-  const openItem = (item) => navigation.navigate('ItemDetail', { item, restaurant });
+  const openItem = (item) => navigation.navigate('DishPreview', { item, restaurant });
 
   // Ajout rapide : pas de connexion exigée (panier invité, connexion demandée au paiement)
   const handleAdd = async (item) => {
     if (!isDishOrderableToday(item, today)) { toast.show(getDishUnavailableLabel(item, today)); return false; }
     // Un plat avec options obligatoires doit passer par la fiche pour les choisir
     const needsChoice = (item.option_groups || []).some(g => g.is_required);
-    if (needsChoice) { openItem(item); return false; }
+    if (needsChoice) { navigation.navigate('ItemDetail', { item, restaurant }); return false; }
     const added = await addItem({ ...item, effective_price: pricing(item).effective }, 1, restaurant);
     if (added === false) return false;
     toast.show(`${clean(item.name)} ajouté au panier`);
