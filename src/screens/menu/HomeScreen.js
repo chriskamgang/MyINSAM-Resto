@@ -36,6 +36,9 @@ const GRILLADES_IMAGE = require('../../../assets/images/category-grillades.png')
 const PIZZA_IMAGE = require('../../../assets/images/category-pizza.png');
 const dishCategoryText = (dish) => `${dish.name || ''} ${dish.description || ''} ${dish._menuCategory || ''} ${dish.category?.name || ''} ${dish.category_name || ''}`;
 const dishTypeText = (dish) => `${dish.name || ''} ${dish._menuCategory || ''} ${dish.category?.name || ''} ${dish.category_name || ''}`;
+const isEstuaireRestaurant = (restaurant) => /\bestuaire\b/i.test(
+  String(restaurant?.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+);
 const FOOD_CATEGORIES = [
   { id: 'all', name: 'Tous', image: CAMEROON_DISH_IMAGE, matcher: null },
   { id: 'chicken', name: 'Poulet', imageIndex: 1, matcher: /poulet|chicken|wings?|tenders?/i },
@@ -124,7 +127,7 @@ function HomeDishCard({ item, liked, onLike, onPress, onAdd, previewOnly }) {
       </SmartImage>
       <View style={styles.dishBody}>
         <Text style={styles.dishName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.dishDescription} numberOfLines={1}>{item.description || item._restaurant?.name || 'Plat du jour'}</Text>
+        <Text style={styles.dishDescription} numberOfLines={1}>{item._restaurant?.name || item.description || 'Plat du jour'}</Text>
         <View style={styles.dishBottom}>
           <View style={{ flex: 1 }}><Text style={styles.dishPrice} numberOfLines={1}>{formatPrice(hasPromo ? promo : base)}</Text>{hasPromo && <Text style={styles.dishOldPrice}>{formatPrice(base)}</Text>}</View>
           <TouchableOpacity style={styles.dishAdd} onPress={onAdd} accessibilityLabel={previewOnly ? `Voir quand ${item.name} est disponible` : `Ajouter ${item.name} au panier`}><Ionicons name={previewOnly ? 'calendar-outline' : 'cart-outline'} size={17} color="#fff" /></TouchableOpacity>
@@ -207,7 +210,16 @@ export default function HomeScreen({ navigation }) {
     setError(false);
     try {
       const restData = await restaurantService.getRestaurants();
-      const list = restData?.data || restData || [];
+      let list = restData?.data || restData || [];
+      if (!list.some(isEstuaireRestaurant)) {
+        try {
+          const response = await restaurantService.getRestaurants({ search: 'Estuaire' });
+          const estuaire = (response?.data || response || []).filter(isEstuaireRestaurant);
+          list = [...estuaire, ...list.filter((restaurant) => !estuaire.some((match) => match.id === restaurant.id))];
+        } catch (_) {
+          // La liste principale reste utilisable si la recherche ciblée échoue.
+        }
+      }
       setRestaurants(list);
       setPage(restData?.current_page || 1);
       setHasMore(!!restData?.last_page && restData.current_page < restData.last_page);
@@ -302,26 +314,23 @@ export default function HomeScreen({ navigation }) {
     .filter((item) => isDishFeaturedForDay(item, menuDay, today) && (!categoryMatcher || categoryMatcher.test(dishTypeText(item)))),
     [dishes, menuDay, today, categoryMatcher]);
 
-  const recentDishes = useMemo(() => visibleMenuDishes
-    .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || item.published_at || '') || 0 }))
-    .sort((a, b) => b.date - a.date || a.index - b.index)
-    .slice(0, 3)
-    .map(({ item }) => item), [visibleMenuDishes]);
-
-  const popularDishes = useMemo(() => {
-    const sorted = visibleMenuDishes
-    .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || '') || 0 }))
-    .sort((a, b) => Number(!!b.item.is_featured) - Number(!!a.item.is_featured) || b.date - a.date || a.index - b.index)
-    .map(({ item }) => item);
-    const seenRestaurants = new Set();
-    const first = sorted.filter((item) => {
-      const id = item._restaurant?.id;
-      if (!id || seenRestaurants.has(id)) return false;
-      seenRestaurants.add(id);
-      return true;
-    }).slice(0, 4);
-    return [...first, ...sorted.filter((item) => !first.includes(item))];
+  const recentDishes = useMemo(() => {
+    const estuaireDishes = visibleMenuDishes.filter((item) => isEstuaireRestaurant(item._restaurant));
+    const carouselDishes = estuaireDishes.length ? estuaireDishes : visibleMenuDishes;
+    return carouselDishes
+      .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || item.published_at || '') || 0 }))
+      .sort((a, b) => b.date - a.date || a.index - b.index)
+      .slice(0, 3)
+      .map(({ item }) => item);
   }, [visibleMenuDishes]);
+  const heroDishKey = recentDishes.map((item) => `${item._restaurant?.id}-${item.id}`).join('|');
+
+  const dayDishes = useMemo(() => visibleMenuDishes
+    .map((item, index) => ({ item, index, date: Date.parse(item.created_at || item.createdAt || '') || 0 }))
+    .sort((a, b) => Number(isEstuaireRestaurant(b.item._restaurant)) - Number(isEstuaireRestaurant(a.item._restaurant))
+      || Number(!!b.item.is_featured) - Number(!!a.item.is_featured)
+      || b.date - a.date || a.index - b.index)
+    .map(({ item }) => item), [visibleMenuDishes]);
 
   const recentRestaurants = useMemo(() => {
     const latestMenuDate = new Map();
@@ -353,7 +362,7 @@ export default function HomeScreen({ navigation }) {
     bannerOffset.value = 0;
     bannerIndexRef.current = 0;
     setBannerIndex(0);
-  }, [recentDishes, bannerOffset]);
+  }, [heroDishKey, bannerOffset]);
 
   useEffect(() => {
     if (!isFocused || recentDishes.length < 2 || q) return undefined;
@@ -487,15 +496,15 @@ export default function HomeScreen({ navigation }) {
               </ScrollView>
             </View>
 
+            <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>🍽 Plats du {menuDay.label}</Text>{dayDishes.length > 4 && <TouchableOpacity onPress={() => setShowAllPopular((value) => !value)} style={styles.seeAll}><Text style={styles.seeAllText}>{showAllPopular ? 'Voir moins' : 'Voir tout'}</Text><Ionicons name={showAllPopular ? 'chevron-up' : 'arrow-forward'} size={16} color={COLORS.primary} /></TouchableOpacity>}</View>
+            {dayDishes.length > 0 ? <View style={styles.dishGrid}>{dayDishes.slice(0, showAllPopular ? undefined : 4).map((dish) => <HomeDishCard key={`${dish._restaurant?.id}-${dish.id}`} item={dish} previewOnly={!isDishOrderableToday(dish, today)} liked={isFavorite('item', dish.id)} onLike={async () => { const ok = await toggleFavorite('item', { ...dish, restaurant: dish._restaurant }); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View> : menusLoading ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>Aucun plat prévu ce {menuDay.label}.</Text>}
+
             <TouchableOpacity style={styles.promoBanner} onPress={() => promoDish ? openDish(promoDish) : openAllRestaurants()} activeOpacity={0.9}>
               <LinearGradient colors={['#1D0D09', '#5E1904', '#FF7100']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
               <Image source={PROMO_GIFT} style={styles.promoGift} resizeMode="contain" />
               <View style={styles.promoCopy}><Text style={styles.promoLead}>{promoDish ? 'Profitez de' : 'Découvrez nos'}</Text><Text style={styles.promoBig}>{promoDish ? `−${promoPercent}%` : 'saveurs'}</Text><Text style={styles.promoSmall}>{promoDish ? `sur ${promoDish.name}` : 'Préparées pour vous'}</Text></View>
               <View style={styles.promoAction}><Text style={styles.promoActionText}>Commander</Text><Ionicons name="arrow-forward" color="#111" size={14} /></View>
             </TouchableOpacity>
-
-            <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>🔥 Nos Plats Populaires</Text>{popularDishes.length > 4 && <TouchableOpacity onPress={() => setShowAllPopular((value) => !value)} style={styles.seeAll}><Text style={styles.seeAllText}>{showAllPopular ? 'Voir moins' : 'Voir tout'}</Text><Ionicons name={showAllPopular ? 'chevron-up' : 'arrow-forward'} size={16} color={COLORS.primary} /></TouchableOpacity>}</View>
-            {popularDishes.length > 0 ? <View style={styles.dishGrid}>{popularDishes.slice(0, showAllPopular ? undefined : 4).map((dish) => <HomeDishCard key={`${dish._restaurant?.id}-${dish.id}`} item={dish} previewOnly={!isDishOrderableToday(dish, today)} liked={isFavorite('item', dish.id)} onLike={async () => { const ok = await toggleFavorite('item', { ...dish, restaurant: dish._restaurant }); if (!ok) navigation.navigate('Auth', { screen: 'Login' }); }} onPress={() => openDish(dish)} onAdd={() => addDish(dish)} />)}</View> : menusLoading ? <ActivityIndicator color={COLORS.primary} style={styles.featureLoading} /> : <Text style={styles.emptyText}>Aucun plat prévu ce {menuDay.label}.</Text>}
 
             <View style={styles.sectionHeader}><View style={styles.sectionMark} /><Text style={styles.sectionTitle}>Restaurants récents</Text><TouchableOpacity onPress={openAllRestaurants} style={styles.seeAll}><Text style={styles.seeAllText}>Voir tout</Text><Ionicons name="chevron-forward" size={17} color={COLORS.primary} /></TouchableOpacity></View>
             {recentRestaurants.length > 0 ? (
@@ -561,7 +570,7 @@ const styles = StyleSheet.create({
   catImage: { position: 'absolute', width: '100%', height: 57, top: 0 },
   catLabel: { fontFamily: FONTS.semibold, fontSize: 9, color: '#172034', textAlign: 'center', paddingBottom: 5 },
   catLabelActive: { color: '#fff' },
-  promoBanner: { marginHorizontal: 12, marginTop: 3, height: 85, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', ...SHADOWS.sm },
+  promoBanner: { marginHorizontal: 12, marginTop: 16, height: 85, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', ...SHADOWS.sm },
   promoGift: { width: 93, height: 87, marginLeft: -4 },
   promoCopy: { flex: 1, marginLeft: 3 },
   promoLead: { color: '#fff', fontFamily: FONTS.semibold, fontStyle: 'italic', fontSize: 12 },
